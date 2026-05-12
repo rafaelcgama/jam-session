@@ -30,6 +30,7 @@ const API = '/api/musicians';
 // ===== STATE =====
 let musicians = [];   // in-memory cache from server
 let state = {
+  view:      'members',  // 'members' | 'songbook'
   filter:    'all',
   search:    '',
   modalMode: null,
@@ -87,6 +88,9 @@ function showGridLoading() {
 }
 
 function renderMusicians() {
+  // Dispatch to the correct view
+  if (state.view === 'songbook') { renderSongbook(); return; }
+
   const grid = document.getElementById('musicians-grid');
   const list = getFilteredMusicians();
   const total = musicians.length;
@@ -130,6 +134,122 @@ function renderMusicians() {
       }
     });
   });
+}
+
+// ===== SONGBOOK =====
+
+/**
+ * Aggregates all unique songs from all musicians into a map:
+ * { songTitle -> { roleId -> [musicianName, ...] } }
+ */
+function buildSongbook() {
+  const q = state.search.toLowerCase().trim();
+  const book = {};
+  for (const m of musicians) {
+    for (const [title, rids] of Object.entries(m.songs)) {
+      if (q && !title.toLowerCase().includes(q)) continue;
+      if (!book[title]) book[title] = {};
+      for (const rid of rids) {
+        if (!book[title][rid]) book[title][rid] = [];
+        book[title][rid].push(m.name);
+      }
+    }
+  }
+  return book;
+}
+
+function renderSongbook() {
+  const container = document.getElementById('songbook-grid');
+  const book = buildSongbook();
+  const titles = Object.keys(book).sort((a, b) => a.localeCompare(b));
+
+  // Section count shows number of unique songs
+  document.querySelector('.section-count').textContent =
+    ` ${titles.length} Song${titles.length !== 1 ? 's' : ''}`;
+
+  if (titles.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🎼</div>
+        <div class="empty-title">No songs found</div>
+        <p class="empty-desc">Add songs to your profile to see them here!</p>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = titles.map(title => {
+    const roleMap = book[title]; // { roleId -> [names] }
+    const roleIds = Object.keys(roleMap);
+    const totalPlayers = new Set(Object.values(roleMap).flat()).size;
+
+    const iconBadges = roleIds.map(rid => {
+      const role = ROLE_MAP[rid];
+      if (!role) return '';
+      return `<span class="song-row-icon-badge"
+        style="color:${role.color};border-color:${role.color}55;background:${role.color}14">
+        ${role.icon} ${role.label}
+      </span>`;
+    }).join('');
+
+    return `
+      <div class="song-row" data-song="${encodeURIComponent(title)}">
+        <div>
+          <div class="song-row-title">${title}</div>
+          <div class="song-row-meta">${totalPlayers} musician${totalPlayers !== 1 ? 's' : ''} · ${roleIds.length} instrument${roleIds.length !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="song-row-icons">${iconBadges}</div>
+      </div>`;
+  }).join('');
+
+  container.querySelectorAll('.song-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const title = decodeURIComponent(row.dataset.song);
+      openInstantBandModal(title, book[title]);
+    });
+  });
+}
+
+function openInstantBandModal(title, roleMap) {
+  // Build the "Instant Band" breakdown — all ROLES in order, show who can play each
+  const sectionsHtml = ROLES.map(role => {
+    const names = roleMap[role.id] || [];
+    const badgesHtml = names.length > 0
+      ? names.map(name => `
+          <span class="instant-band-badge"
+            style="color:${role.color};border-color:${role.color}55;background:${role.color}14">
+            ${role.icon} ${name}
+          </span>`).join('')
+      : `<span class="instant-band-missing">⚠️ No one registered yet</span>`;
+
+    // Only show roles that are represented OR are missing but someone might fill
+    if (names.length === 0 && !roleMap[role.id]) return '';
+
+    return `
+      <div class="instant-band-section">
+        <div class="instant-band-label" style="color:${role.color}">${role.icon} ${role.label}</div>
+        <div class="instant-band-badges">${badgesHtml}</div>
+      </div>`;
+  }).join('');
+
+  setModalContent(`
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">🎵 ${title}</div>
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.2rem">Instant Band</div>
+      </div>
+      <button class="modal-close" id="modal-close-btn">✕</button>
+    </div>
+    <div style="padding:0 0.25rem">
+      ${sectionsHtml}
+    </div>
+    <div style="margin-top:1.5rem;text-align:right">
+      <button class="btn btn-secondary" id="modal-close-btn2">Close</button>
+    </div>
+  `);
+
+  document.getElementById('modal-close-btn').addEventListener('click', closeModal);
+  document.getElementById('modal-close-btn2').addEventListener('click', closeModal);
+  openModal();
 }
 
 function renderCard(m) {
@@ -575,6 +695,37 @@ async function init() {
 
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
+  // ── View toggle (Members ↔ Songbook) ────────────────────────────────────
+  function switchView(view) {
+    state.view = view;
+    const membersGrid  = document.getElementById('musicians-grid');
+    const songbookGrid = document.getElementById('songbook-grid');
+    const filterBar    = document.getElementById('filter-bar');
+    const btnMembers   = document.getElementById('toggle-members');
+    const btnSongbook  = document.getElementById('toggle-songbook');
+    const searchInput  = document.getElementById('search-input');
+
+    if (view === 'members') {
+      membersGrid.classList.remove('hidden');
+      songbookGrid.classList.add('hidden');
+      filterBar.classList.remove('hidden');
+      btnMembers.classList.add('active');
+      btnSongbook.classList.remove('active');
+      searchInput.placeholder = 'Search musician or song…';
+    } else {
+      membersGrid.classList.add('hidden');
+      songbookGrid.classList.remove('hidden');
+      filterBar.classList.add('hidden');
+      btnSongbook.classList.add('active');
+      btnMembers.classList.remove('active');
+      searchInput.placeholder = 'Search songs…';
+    }
+    renderMusicians();
+  }
+
+  document.getElementById('toggle-members').addEventListener('click', () => switchView('members'));
+  document.getElementById('toggle-songbook').addEventListener('click', () => switchView('songbook'));
+
   try {
     await loadMusicians();
   } catch (err) {
@@ -583,7 +734,7 @@ async function init() {
       <div class="empty-state" style="grid-column:1/-1">
         <div class="empty-icon">⚠️</div>
         <div class="empty-title">Could not connect to server</div>
-        <p class="empty-desc">Make sure the server is running: <code>node server.js</code></p>
+        <p class="empty-desc">Make sure the server is running: <code>python main.py</code></p>
       </div>`;
   }
 }

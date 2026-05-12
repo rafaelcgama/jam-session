@@ -41,13 +41,20 @@
         The Crew
         <span class="section-count"></span>
       </h1>
+      <div class="view-toggle" id="view-toggle">
+        <button class="toggle-btn active" id="toggle-members">🎸 The Crew</button>
+        <button class="toggle-btn" id="toggle-songbook">📖 Songbook</button>
+      </div>
     </div>
 
-    <!-- Role filter chips -->
+    <!-- Role filter chips (hidden in songbook view) -->
     <div class="filter-bar" id="filter-bar" role="group" aria-label="Filter by role"></div>
 
     <!-- Musicians grid -->
     <div class="musicians-grid" id="musicians-grid" role="list"></div>
+
+    <!-- Songbook grid (hidden by default) -->
+    <div class="songbook-grid hidden" id="songbook-grid" role="list"></div>
   </main>
 
   <!-- ===== MODAL ===== -->
