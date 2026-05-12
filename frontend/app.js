@@ -350,6 +350,9 @@ function renderSongsEditor() {
   if (state.editRoles.length === 0) { section.style.display = 'none'; return; }
   section.style.display = '';
 
+  const inputEl = document.getElementById('song-input-new');
+  const currentVal = inputEl ? inputEl.value : '';
+
   const songs = Object.keys(state.editSongs);
   
   let html = `<div class="song-add-row" style="margin-bottom:1rem;display:flex;gap:0.5rem">
@@ -363,19 +366,29 @@ function renderSongsEditor() {
     html += `<div class="songs-editor-list" style="display:flex;flex-direction:column;gap:0.5rem">`;
     songs.forEach(title => {
       const rids = state.editSongs[title] || [];
-      const roleToggles = state.editRoles.map(rid => {
+      
+      const roleBadges = rids.map(rid => {
         const role = ROLE_MAP[rid];
-        const active = rids.includes(rid);
-        return `<button type="button" class="mini-role-toggle ${active ? 'active' : ''}" data-title="${title}" data-role="${rid}" style="background:${active ? role.color : 'transparent'};color:${active ? '#fff' : role.color};border:1px solid ${role.color};border-radius:4px;padding:0.15rem 0.4rem;font-size:0.75rem;cursor:pointer;opacity:${active ? 1 : 0.5};transition:all 0.2s">${role.icon} ${role.label}</button>`;
+        if (!role) return '';
+        return `<span class="mini-role-badge" data-title="${title}" data-role="${rid}" style="background:${role.color};color:#fff;border-radius:4px;padding:0.15rem 0.4rem;font-size:0.75rem;cursor:pointer;display:inline-flex;align-items:center;gap:0.3rem" title="Remove role">${role.icon} ${role.label} <span style="font-size:0.6rem;opacity:0.7">✕</span></span>`;
       }).join('');
+      
+      const availableRoles = state.editRoles.filter(r => !rids.includes(r));
+      const addSelectHtml = availableRoles.length > 0 ? `
+        <select class="song-role-select" data-title="${title}" style="background:transparent;border:1px dashed var(--text-muted);color:var(--text-primary);border-radius:4px;padding:0.1rem 0.3rem;font-size:0.75rem;cursor:pointer;outline:none">
+          <option value="">+ Add Role</option>
+          ${availableRoles.map(r => `<option value="${r}">${ROLE_MAP[r].label}</option>`).join('')}
+        </select>
+      ` : '';
       
       html += `
         <div class="songs-editor-block" style="background:var(--bg-tertiary);padding:0.75rem;border-radius:6px;display:flex;flex-direction:column;gap:0.5rem;position:relative">
           <button type="button" class="song-tag-remove" data-title="${title}" style="position:absolute;top:0.5rem;right:0.5rem;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1rem;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background 0.2s">✕</button>
           <div class="song-title" style="font-weight:600;padding-right:1.5rem;color:var(--text-primary)">${title}</div>
           <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:-0.2rem">Instruments I play on this song:</div>
-          <div class="song-role-toggles" style="display:flex;flex-wrap:wrap;gap:0.4rem">
-            ${roleToggles}
+          <div class="song-role-toggles" style="display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center">
+            ${roleBadges}
+            ${addSelectHtml}
           </div>
         </div>`;
     });
@@ -384,6 +397,12 @@ function renderSongsEditor() {
   
   editor.innerHTML = html;
 
+  const newInputEl = document.getElementById('song-input-new');
+  if (newInputEl) {
+    newInputEl.value = currentVal;
+    if (currentVal) newInputEl.focus();
+  }
+
   editor.querySelectorAll('.song-tag-remove').forEach(btn => {
     btn.addEventListener('click', () => {
       delete state.editSongs[btn.dataset.title];
@@ -391,14 +410,22 @@ function renderSongsEditor() {
     });
   });
 
-  editor.querySelectorAll('.mini-role-toggle').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const title = btn.dataset.title;
-      const rid = btn.dataset.role;
+  editor.querySelectorAll('.mini-role-badge').forEach(badge => {
+    badge.addEventListener('click', () => {
+      const title = badge.dataset.title;
+      const rid = badge.dataset.role;
+      state.editSongs[title] = state.editSongs[title].filter(r => r !== rid);
+      renderSongsEditor();
+    });
+  });
+
+  editor.querySelectorAll('.song-role-select').forEach(select => {
+    select.addEventListener('change', () => {
+      if (!select.value) return;
+      const title = select.dataset.title;
+      const rid = select.value;
       if (!state.editSongs[title]) state.editSongs[title] = [];
-      if (state.editSongs[title].includes(rid)) {
-        state.editSongs[title] = state.editSongs[title].filter(r => r !== rid);
-      } else {
+      if (!state.editSongs[title].includes(rid)) {
         state.editSongs[title].push(rid);
       }
       renderSongsEditor();
@@ -423,7 +450,6 @@ function addSongFromInput() {
   if (!val) return;
   
   if (!state.editSongs[val]) {
-    // Default to adding all currently selected roles to the new song
     state.editSongs[val] = [...state.editRoles];
   }
   
