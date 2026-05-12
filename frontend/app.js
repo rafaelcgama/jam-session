@@ -10,6 +10,12 @@ const ROLES = [
   { id: 'flutist',    label: 'Flutist',    icon: '🪈', color: '#ffd166' },
   { id: 'ukulele',    label: 'Ukulele',    icon: '🪕', color: '#06d6a0' },
   { id: 'horn',       label: 'Horn',       icon: '🎺', color: '#ef476f' },
+  { id: 'cello',      label: 'Cello',      icon: '🎻', color: '#c44536' },
+  { id: 'saxophone',  label: 'Saxophone',  icon: '🎷', color: '#fca311' },
+  { id: 'percussion', label: 'Percussion', icon: '🪘', color: '#8b5a2b' },
+  { id: 'accordion',  label: 'Accordion',  icon: '🪗', color: '#d90429' },
+  { id: 'banjo',      label: 'Banjo',      icon: '🪕', color: '#ffb703' },
+  { id: 'synth',      label: 'Synth/DJ',   icon: '🎛️', color: '#00f5d4' },
 ];
 
 const ROLE_MAP = Object.fromEntries(ROLES.map(r => [r.id, r]));
