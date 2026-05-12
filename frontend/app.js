@@ -67,7 +67,7 @@ function getFilteredMusicians() {
   if (q) {
     list = list.filter(m => {
       if (m.name.toLowerCase().includes(q)) return true;
-      return Object.values(m.songs).flat().some(s => s.toLowerCase().includes(q));
+      return Object.keys(m.songs).some(s => s.toLowerCase().includes(q));
     });
   }
   if (state.filter !== 'all') {
@@ -143,23 +143,30 @@ function renderCard(m) {
     </span>`;
   }).join('');
 
-  const songsHtml = m.roles.map(rid => {
-    const role = ROLE_MAP[rid];
-    if (!role) return '';
-    const songs = (m.songs[rid] || []).slice(0, 3);
-    const extra = (m.songs[rid] || []).length - 3;
-    return `<div class="role-songs-block">
-      <div class="role-songs-label">${role.icon} ${role.label}</div>
-      <div class="songs-list">
-        ${songs.length === 0
-          ? '<div class="no-songs">No songs added yet</div>'
-          : songs.map(s => `<div class="song-item">${s}</div>`).join('')}
-        ${extra > 0 ? `<div class="song-item" style="color:var(--text-muted);font-style:italic">+${extra} more</div>` : ''}
-      </div>
-    </div>`;
-  }).join('');
+  const songKeys = Object.keys(m.songs);
+  const displaySongs = songKeys.slice(0, 5);
+  const extra = songKeys.length - 5;
+  
+  let songsHtml = '';
+  if (songKeys.length === 0) {
+    songsHtml = '<div class="no-songs" style="margin-top:0.5rem">No songs added yet</div>';
+  } else {
+    songsHtml = '<div class="songs-list" style="margin-top:0.5rem;display:flex;flex-direction:column;gap:0.3rem">';
+    songsHtml += displaySongs.map(title => {
+      const rids = m.songs[title] || [];
+      const icons = rids.map(rid => ROLE_MAP[rid]?.icon).filter(Boolean).join(' ');
+      return `<div class="song-item" style="display:flex;justify-content:space-between;background:var(--bg-tertiary);padding:0.4rem 0.6rem;border-radius:4px;font-size:0.85rem">
+        <span class="song-title" style="font-weight:500">${title}</span> 
+        <span class="song-icons" style="letter-spacing:2px">${icons}</span>
+      </div>`;
+    }).join('');
+    if (extra > 0) {
+      songsHtml += `<div class="song-item" style="color:var(--text-muted);font-style:italic;font-size:0.8rem;text-align:center;padding-top:0.3rem">+${extra} more</div>`;
+    }
+    songsHtml += '</div>';
+  }
 
-  const songCount = Object.values(m.songs).flat().length;
+  const songCount = songKeys.length;
 
   return `
     <div class="musician-card" data-id="${m.id}" data-name="${m.name}"
@@ -206,26 +213,29 @@ function openViewModal(id) {
   if (!m) return;
   const accentColor = ROLE_MAP[m.roles[0]]?.color || '#5b8cff';
 
-  const rolesHtml = m.roles.map(rid => {
-    const role = ROLE_MAP[rid];
-    if (!role) return '';
-    const songs = m.songs[rid] || [];
-    return `<div class="detail-role-block">
-      <div class="detail-role-heading" style="color:${role.color}">
-        ${role.icon} ${role.label}
-        <span style="color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0">
-          — ${songs.length} song${songs.length !== 1 ? 's' : ''}
-        </span>
-      </div>
-      <div class="detail-songs-list">
-        ${songs.length === 0
-          ? '<div class="no-songs">No songs listed yet</div>'
-          : songs.map(s => `<div class="detail-song">${s}</div>`).join('')}
-      </div>
-    </div>`;
-  }).join('');
+  const songKeys = Object.keys(m.songs);
+  
+  let songsHtml = '';
+  if (songKeys.length === 0) {
+    songsHtml = '<div class="no-songs" style="padding:1rem 0;text-align:center">No songs listed yet</div>';
+  } else {
+    songsHtml = '<div class="detail-songs-list" style="display:flex;flex-direction:column;gap:0.5rem;margin-top:1rem">';
+    songsHtml += songKeys.map(title => {
+      const rids = m.songs[title] || [];
+      const roleBadges = rids.map(rid => {
+        const role = ROLE_MAP[rid];
+        if (!role) return '';
+        return `<span class="inline-role-badge" style="color:${role.color};border:1px solid ${role.color}44;background:${role.color}11;padding:0.15rem 0.4rem;border-radius:12px;font-size:0.75rem;font-weight:600;display:inline-flex;align-items:center;gap:0.25rem">${role.icon} ${role.label}</span>`;
+      }).join('');
+      return `<div class="detail-song-row" style="background:var(--bg-tertiary);padding:0.75rem;border-radius:6px;display:flex;flex-direction:column;gap:0.4rem">
+        <div class="ds-title" style="font-weight:600;font-size:1.05rem;color:var(--text-primary)">${title}</div>
+        <div class="ds-roles" style="display:flex;flex-wrap:wrap;gap:0.4rem">${roleBadges}</div>
+      </div>`;
+    }).join('');
+    songsHtml += '</div>';
+  }
 
-  const songCount = Object.values(m.songs).flat().length;
+  const songCount = songKeys.length;
 
   setModalContent(`
     <div class="modal-header">
@@ -242,7 +252,7 @@ function openViewModal(id) {
       </div>
       <button class="modal-close" id="modal-close-btn">✕</button>
     </div>
-    <div class="detail-roles">${rolesHtml}</div>
+    <div class="detail-roles">${songsHtml}</div>
     <div class="form-actions">
       <button class="btn btn-secondary" id="modal-edit-btn">✏️ Edit Profile</button>
     </div>
@@ -325,7 +335,6 @@ function renderRolesGrid() {
         state.editRoles = state.editRoles.filter(r => r !== rid);
       } else {
         state.editRoles.push(rid);
-        if (!state.editSongs[rid]) state.editSongs[rid] = [];
       }
       renderRolesGrid();
       renderSongsEditor();
@@ -341,57 +350,86 @@ function renderSongsEditor() {
   if (state.editRoles.length === 0) { section.style.display = 'none'; return; }
   section.style.display = '';
 
-  editor.innerHTML = state.editRoles.map(rid => {
-    const role  = ROLE_MAP[rid];
-    if (!role) return '';
-    const songs = state.editSongs[rid] || [];
-    return `
-      <div class="songs-editor-block" data-role="${rid}">
-        <div class="songs-editor-label" style="color:${role.color}">${role.icon} ${role.label}</div>
-        <div class="songs-editor-tags" id="tags-${rid}">
-          ${songs.map((s, i) => `
-            <span class="song-tag">
-              ${s}
-              <button class="song-tag-remove" data-role="${rid}" data-idx="${i}">✕</button>
-            </span>`).join('')}
-        </div>
-        <div class="song-add-row">
-          <input class="form-input" id="song-input-${rid}" type="text"
-                 placeholder="Song title…" autocomplete="off" />
-          <button class="btn-add-song" data-role="${rid}">+ Add</button>
-        </div>
-      </div>`;
-  }).join('');
+  const songs = Object.keys(state.editSongs);
+  
+  let html = `<div class="song-add-row" style="margin-bottom:1rem;display:flex;gap:0.5rem">
+    <input class="form-input" id="song-input-new" type="text" placeholder="Add a song you play..." autocomplete="off" style="flex:1" />
+    <button class="btn btn-secondary" id="btn-add-song-new" style="white-space:nowrap">+ Add</button>
+  </div>`;
+  
+  if (songs.length === 0) {
+    html += `<div class="no-songs" style="text-align:center;padding:1rem 0;color:var(--text-muted)">No songs added yet.</div>`;
+  } else {
+    html += `<div class="songs-editor-list" style="display:flex;flex-direction:column;gap:0.5rem">`;
+    songs.forEach(title => {
+      const rids = state.editSongs[title] || [];
+      const roleToggles = state.editRoles.map(rid => {
+        const role = ROLE_MAP[rid];
+        const active = rids.includes(rid);
+        return `<button type="button" class="mini-role-toggle ${active ? 'active' : ''}" data-title="${title}" data-role="${rid}" style="background:${active ? role.color : 'transparent'};color:${active ? '#fff' : role.color};border:1px solid ${role.color};border-radius:4px;padding:0.15rem 0.4rem;font-size:0.75rem;cursor:pointer;opacity:${active ? 1 : 0.5};transition:all 0.2s">${role.icon} ${role.label}</button>`;
+      }).join('');
+      
+      html += `
+        <div class="songs-editor-block" style="background:var(--bg-tertiary);padding:0.75rem;border-radius:6px;display:flex;flex-direction:column;gap:0.5rem;position:relative">
+          <button type="button" class="song-tag-remove" data-title="${title}" style="position:absolute;top:0.5rem;right:0.5rem;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1rem;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background 0.2s">✕</button>
+          <div class="song-title" style="font-weight:600;padding-right:1.5rem;color:var(--text-primary)">${title}</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:-0.2rem">Instruments I play on this song:</div>
+          <div class="song-role-toggles" style="display:flex;flex-wrap:wrap;gap:0.4rem">
+            ${roleToggles}
+          </div>
+        </div>`;
+    });
+    html += `</div>`;
+  }
+  
+  editor.innerHTML = html;
 
   editor.querySelectorAll('.song-tag-remove').forEach(btn => {
     btn.addEventListener('click', () => {
-      state.editSongs[btn.dataset.role].splice(parseInt(btn.dataset.idx), 1);
+      delete state.editSongs[btn.dataset.title];
       renderSongsEditor();
     });
   });
 
-  editor.querySelectorAll('.btn-add-song').forEach(btn => {
-    btn.addEventListener('click', () => addSongFromInput(btn.dataset.role));
-  });
-
-  editor.querySelectorAll('input[id^="song-input-"]').forEach(input => {
-    const rid = input.id.replace('song-input-', '');
-    input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); addSongFromInput(rid); }
+  editor.querySelectorAll('.mini-role-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const title = btn.dataset.title;
+      const rid = btn.dataset.role;
+      if (!state.editSongs[title]) state.editSongs[title] = [];
+      if (state.editSongs[title].includes(rid)) {
+        state.editSongs[title] = state.editSongs[title].filter(r => r !== rid);
+      } else {
+        state.editSongs[title].push(rid);
+      }
+      renderSongsEditor();
     });
   });
+
+  const addBtn = document.getElementById('btn-add-song-new');
+  if (addBtn) addBtn.addEventListener('click', addSongFromInput);
+
+  const input = document.getElementById('song-input-new');
+  if (input) {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); addSongFromInput(); }
+    });
+  }
 }
 
-function addSongFromInput(rid) {
-  const input = document.getElementById(`song-input-${rid}`);
+function addSongFromInput() {
+  const input = document.getElementById('song-input-new');
   if (!input) return;
   const val = input.value.trim();
   if (!val) return;
-  if (!state.editSongs[rid]) state.editSongs[rid] = [];
-  if (!state.editSongs[rid].includes(val)) state.editSongs[rid].push(val);
+  
+  if (!state.editSongs[val]) {
+    // Default to adding all currently selected roles to the new song
+    state.editSongs[val] = [...state.editRoles];
+  }
+  
   input.value = '';
   renderSongsEditor();
-  setTimeout(() => { const el = document.getElementById(`song-input-${rid}`); if (el) el.focus(); }, 50);
+  setTimeout(() => { const el = document.getElementById('song-input-new'); if (el) el.focus(); }, 50);
 }
 
 async function saveEdit() {
@@ -407,11 +445,19 @@ async function saveEdit() {
   const existing = musicians.find(m => m.id === state.editingId);
   const colorIdx = existing ? existing.colorIdx : musicians.length % AVATAR_COLORS.length;
 
+  const finalSongs = {};
+  for (const [title, rids] of Object.entries(state.editSongs)) {
+    const validRids = rids.filter(rid => state.editRoles.includes(rid));
+    if (validRids.length > 0) {
+      finalSongs[title] = validRids;
+    }
+  }
+
   const payload = {
     name,
     colorIdx,
     roles: state.editRoles,
-    songs: Object.fromEntries(state.editRoles.map(rid => [rid, state.editSongs[rid] || []])),
+    songs: finalSongs,
   };
 
   try {
