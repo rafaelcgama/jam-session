@@ -10,3 +10,11 @@ venv/
 jam.db
 jam.db-shm
 jam.db-wal
+
+# IDE
+.idea/
+.vscode/
+
+# Testing
+.pytest_cache/
+.coverage
