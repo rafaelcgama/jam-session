@@ -225,7 +225,7 @@ function openViewModal(id) {
       const roleBadges = rids.map(rid => {
         const role = ROLE_MAP[rid];
         if (!role) return '';
-        return `<span class="inline-role-badge" style="color:${role.color};border:1px solid ${role.color}44;background:${role.color}11;padding:0.15rem 0.4rem;border-radius:12px;font-size:0.75rem;font-weight:600;display:inline-flex;align-items:center;gap:0.25rem">${role.icon} ${role.label}</span>`;
+        return `<span class="inline-role-badge" style="color:${role.color};border:1px solid ${role.color}44;background:${role.color}11;padding:0.15rem 0.4rem;border-radius:12px;font-size:0.75rem;font-weight:600;display:inline-flex;align-items:center;gap:0.25rem" title="Instrument">${role.icon} ${role.label}</span>`;
       }).join('');
       return `<div class="detail-song-row" style="background:var(--bg-tertiary);padding:0.75rem;border-radius:6px;display:flex;flex-direction:column;gap:0.4rem">
         <div class="ds-title" style="font-weight:600;font-size:1.05rem;color:var(--text-primary)">${title}</div>
@@ -297,12 +297,12 @@ function renderEditModal(title) {
     </div>
 
     <div class="form-group">
-      <label class="form-label">Instruments / Roles</label>
+      <label class="form-label">Instruments</label>
       <div class="roles-grid" id="roles-grid"></div>
     </div>
 
     <div class="form-group" id="songs-section" style="display:none">
-      <label class="form-label">Songs per Role</label>
+      <label class="form-label">Songs</label>
       <div class="songs-editor" id="songs-editor"></div>
     </div>
 
@@ -347,7 +347,6 @@ function renderSongsEditor() {
   const editor  = document.getElementById('songs-editor');
   if (!section || !editor) return;
 
-  if (state.editRoles.length === 0) { section.style.display = 'none'; return; }
   section.style.display = '';
 
   const inputEl = document.getElementById('song-input-new');
@@ -376,7 +375,7 @@ function renderSongsEditor() {
       const availableRoles = state.editRoles.filter(r => !rids.includes(r));
       const addSelectHtml = availableRoles.length > 0 ? `
         <select class="song-role-select" data-title="${title}" style="background:transparent;border:1px dashed var(--text-muted);color:var(--text-primary);border-radius:4px;padding:0.1rem 0.3rem;font-size:0.75rem;cursor:pointer;outline:none">
-          <option value="">+ Add Role</option>
+          <option value="">+ Add Instrument</option>
           ${availableRoles.map(r => `<option value="${r}">${ROLE_MAP[r].label}</option>`).join('')}
         </select>
       ` : '';
@@ -453,7 +452,11 @@ function addSongFromInput() {
     state.editSongs[val] = [...state.editRoles];
   }
   
+  // Clear selected instruments after adding the song
+  state.editRoles = [];
+  
   input.value = '';
+  renderRolesGrid();
   renderSongsEditor();
   setTimeout(() => { const el = document.getElementById('song-input-new'); if (el) el.focus(); }, 50);
 }
@@ -462,7 +465,6 @@ async function saveEdit() {
   const nameInput = document.getElementById('edit-name');
   const name = nameInput.value.trim();
   if (!name) { nameInput.focus(); toast('Please enter your name', 'error'); return; }
-  if (state.editRoles.length === 0) { toast('Select at least one role', 'error'); return; }
 
   const saveBtn = document.getElementById('modal-save-btn');
   saveBtn.disabled = true;
@@ -472,17 +474,28 @@ async function saveEdit() {
   const colorIdx = existing ? existing.colorIdx : musicians.length % AVATAR_COLORS.length;
 
   const finalSongs = {};
+  const allSongRids = new Set();
+  
   for (const [title, rids] of Object.entries(state.editSongs)) {
-    const validRids = rids.filter(rid => state.editRoles.includes(rid));
-    if (validRids.length > 0) {
-      finalSongs[title] = validRids;
+    if (rids.length > 0) {
+      finalSongs[title] = rids;
+      rids.forEach(r => allSongRids.add(r));
     }
+  }
+
+  const finalRoles = Array.from(new Set([...state.editRoles, ...allSongRids]));
+  
+  if (finalRoles.length === 0) {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save Member';
+    toast('Select at least one instrument', 'error'); 
+    return;
   }
 
   const payload = {
     name,
     colorIdx,
-    roles: state.editRoles,
+    roles: finalRoles,
     songs: finalSongs,
   };
 
