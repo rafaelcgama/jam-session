@@ -99,7 +99,7 @@ function renderMusicians() {
   if (list.length === 0) {
     grid.innerHTML = `
       <div class="empty-state" style="grid-column:1/-1">
-        <div class="empty-icon">🎸</div>
+        <div class="empty-icon">🎼</div>
         <div class="empty-title">No musicians found</div>
         <p class="empty-desc">Try a different search or be the first to join!</p>
       </div>`;
