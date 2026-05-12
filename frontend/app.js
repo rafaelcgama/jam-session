@@ -372,7 +372,7 @@ function renderSongsEditor() {
         return `<span class="mini-role-badge" data-title="${title}" data-role="${rid}" style="background:${role.color};color:#fff;border-radius:4px;padding:0.15rem 0.4rem;font-size:0.75rem;cursor:pointer;display:inline-flex;align-items:center;gap:0.3rem" title="Remove role">${role.icon} ${role.label} <span style="font-size:0.6rem;opacity:0.7">✕</span></span>`;
       }).join('');
       
-      const availableRoles = state.editRoles.filter(r => !rids.includes(r));
+      const availableRoles = ROLES.map(r => r.id).filter(rid => !rids.includes(rid));
       const addSelectHtml = availableRoles.length > 0 ? `
         <select class="song-role-select" data-title="${title}" style="background:transparent;border:1px dashed var(--text-muted);color:var(--text-primary);border-radius:4px;padding:0.1rem 0.3rem;font-size:0.75rem;cursor:pointer;outline:none">
           <option value="">+ Add Instrument</option>
