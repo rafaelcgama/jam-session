@@ -93,8 +93,8 @@ function renderMusicians() {
 
   document.querySelector('.section-count').textContent =
     list.length === total
-      ? `${total} member${total !== 1 ? 's' : ''}`
-      : `${list.length} of ${total}`;
+      ? ` ${total} Musician${total !== 1 ? 's' : ''}`
+      : ` ${list.length} of ${total}`;
 
   if (list.length === 0) {
     grid.innerHTML = `
@@ -177,7 +177,7 @@ function renderCard(m) {
         </div>
         <div>
           <div class="card-name">${m.name}</div>
-          <div class="card-meta">${songCount} song${songCount !== 1 ? 's' : ''} · ${m.roles.length} role${m.roles.length !== 1 ? 's' : ''}</div>
+          <div class="card-meta">${songCount} song${songCount !== 1 ? 's' : ''} · ${m.roles.length} instrument${m.roles.length !== 1 ? 's' : ''}</div>
         </div>
       </div>
       <div class="roles-list">${rolesHtml}</div>
@@ -246,7 +246,7 @@ function openViewModal(id) {
         <div>
           <div class="modal-title">${m.name}</div>
           <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.1rem">
-            ${songCount} song${songCount !== 1 ? 's' : ''} · ${m.roles.length} role${m.roles.length !== 1 ? 's' : ''}
+            ${songCount} song${songCount !== 1 ? 's' : ''} · ${m.roles.length} instrument${m.roles.length !== 1 ? 's' : ''}
           </div>
         </div>
       </div>
