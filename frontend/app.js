@@ -448,6 +448,11 @@ function addSongFromInput() {
   const val = input.value.trim();
   if (!val) return;
   
+  if (state.editRoles.length === 0) {
+    toast('Please select at least one instrument for this song first.', 'error');
+    return;
+  }
+  
   if (!state.editSongs[val]) {
     state.editSongs[val] = [...state.editRoles];
   }
@@ -477,10 +482,14 @@ async function saveEdit() {
   const allSongRids = new Set();
   
   for (const [title, rids] of Object.entries(state.editSongs)) {
-    if (rids.length > 0) {
-      finalSongs[title] = rids;
-      rids.forEach(r => allSongRids.add(r));
+    if (rids.length === 0) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+      toast(`Please add an instrument to the song "${title}", or remove it.`, 'error');
+      return;
     }
+    finalSongs[title] = rids;
+    rids.forEach(r => allSongRids.add(r));
   }
 
   const finalRoles = Array.from(new Set([...state.editRoles, ...allSongRids]));
