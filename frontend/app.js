@@ -308,7 +308,7 @@ function renderEditModal(title) {
 
     <div class="form-actions">
       <button class="btn btn-secondary" id="modal-close-btn2">Cancel</button>
-      <button class="btn btn-primary" id="modal-save-btn">Save Musician</button>
+      <button class="btn btn-primary" id="modal-save-btn">Save</button>
     </div>
   `);
 
@@ -487,7 +487,7 @@ async function saveEdit() {
   
   if (finalRoles.length === 0) {
     saveBtn.disabled = false;
-    saveBtn.textContent = 'Save Musician';
+    saveBtn.textContent = 'Save';
     toast('Select at least one instrument', 'error'); 
     return;
   }
