@@ -93,7 +93,7 @@ function renderMusicians() {
 
   document.querySelector('.section-count').textContent =
     list.length === total
-      ? ` ${total} Musician${total !== 1 ? 's' : ''}`
+      ? ` ${total} Member${total !== 1 ? 's' : ''}`
       : ` ${list.length} of ${total}`;
 
   if (list.length === 0) {
