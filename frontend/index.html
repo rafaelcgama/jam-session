@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JAM Session — Who Plays What</title>
+  <meta name="description" content="Know who plays what at the jam session. Browse musicians, their instruments, and the songs they perform." />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎸</text></svg>" />
+</head>
+<body>
+
+  <!-- ===== HEADER ===== -->
+  <header>
+    <div class="header-inner">
+      <a class="logo" href="#">
+        <img src="logo.png" alt="Logo" class="logo-img" />
+        <div class="logo-text-group">
+          <div class="logo-title">Jam<span>Session</span></div>
+          <div class="logo-subtitle">Digital Nomads FLN</div>
+        </div>
+      </a>
+
+      <div class="search-wrapper">
+        <span class="search-icon">🔍</span>
+        <input id="search-input" type="text" placeholder="Search musician or song…" />
+      </div>
+
+      <div class="header-actions">
+        <button id="add-member-btn" class="btn btn-primary">
+          + Join the Band
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== MAIN ===== -->
+  <main>
+    <div class="section-header">
+      <h1 class="section-title">
+        The Crew
+        <span class="section-count"></span>
+      </h1>
+    </div>
+
+    <!-- Role filter chips -->
+    <div class="filter-bar" id="filter-bar" role="group" aria-label="Filter by role"></div>
+
+    <!-- Musicians grid -->
+    <div class="musicians-grid" id="musicians-grid" role="list"></div>
+  </main>
+
+  <!-- ===== MODAL ===== -->
+  <div class="modal-overlay" id="modal-overlay" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div id="modal-content"></div>
+    </div>
+  </div>
+
+  <!-- ===== TOASTS ===== -->
+  <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
