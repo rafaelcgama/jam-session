@@ -278,7 +278,7 @@ function openEditModal(id) {
   const m = musicians.find(x => x.id === id);
   if (!m) return;
   state.editingId = id;
-  state.editRoles = [...m.roles];
+  state.editRoles = [];
   state.editSongs = JSON.parse(JSON.stringify(m.songs));
   renderEditModal(`Edit: ${m.name}`);
   document.getElementById('edit-name').value = m.name;
@@ -308,7 +308,7 @@ function renderEditModal(title) {
 
     <div class="form-actions">
       <button class="btn btn-secondary" id="modal-close-btn2">Cancel</button>
-      <button class="btn btn-primary" id="modal-save-btn">Save Member</button>
+      <button class="btn btn-primary" id="modal-save-btn">Save Musician</button>
     </div>
   `);
 
@@ -487,7 +487,7 @@ async function saveEdit() {
   
   if (finalRoles.length === 0) {
     saveBtn.disabled = false;
-    saveBtn.textContent = 'Save Member';
+    saveBtn.textContent = 'Save Musician';
     toast('Select at least one instrument', 'error'); 
     return;
   }
