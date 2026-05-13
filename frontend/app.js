@@ -473,13 +473,13 @@ function renderCard(m) {
   if (songKeys.length === 0) {
     songsHtml = '<div class="no-songs" style="margin-top:0.5rem">No songs added yet</div>';
   } else {
-    songsHtml = '<div class="songs-list" style="margin-top:0.5rem;display:flex;flex-direction:column;gap:0.3rem">';
+    songsHtml = '<div class="songs-list member-song-list">';
     songsHtml += displaySongs.map(title => {
       const rids = m.songs[title] || [];
       const icons = rids.map(rid => ROLE_MAP[rid]?.icon).filter(Boolean).join(' ');
-      return `<div class="song-item" style="display:flex;justify-content:space-between;background:var(--bg-tertiary);padding:0.4rem 0.6rem;border-radius:4px;font-size:0.85rem">
+      return `<div class="song-item member-song-item">
         <span class="song-title">${formatSongTitle(title)}</span> 
-        <span class="song-icons" style="letter-spacing:2px">${icons}</span>
+        <span class="song-icons">${icons}</span>
       </div>`;
     }).join('');
     if (extra > 0) {
@@ -683,8 +683,8 @@ function renderSongsEditor() {
 
   const songs = Object.keys(state.editSongs);
   
-    let html = `<div class="song-add-row" style="margin-bottom:1rem;display:flex;gap:0.5rem;position:relative">
-    <div style="flex:1;position:relative">
+    let html = `<div class="song-add-row">
+    <div class="song-add-input-wrap">
       <input class="form-input" id="song-input-new" type="text" placeholder="Add a song you play..." autocomplete="off" style="width:100%" />
       <div id="autocomplete-dropdown" class="autocomplete-dropdown hidden"></div>
     </div>

@@ -367,6 +367,10 @@ main {
   flex-direction: column;
   gap: 0.2rem;
 }
+.member-song-list {
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+}
 .song-item {
   font-size: 0.85rem;
   color: var(--text-secondary);
@@ -375,10 +379,31 @@ main {
   align-items: center;
   gap: 0.4rem;
 }
+.member-song-item {
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+  background: var(--bg-tertiary);
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+}
 .song-item::before {
   content: '♩';
   font-size: 0.7rem;
   color: var(--text-muted);
+}
+.member-song-item .song-title {
+  min-width: 0;
+  text-align: left;
+}
+.member-song-item .song-title > div {
+  align-items: flex-start;
+}
+.member-song-item .song-icons {
+  justify-self: end;
+  letter-spacing: 2px;
+  white-space: nowrap;
 }
 .no-songs {
   font-size: 0.8rem;
@@ -839,21 +864,38 @@ main {
 }
 
 /* ===== AUTOCOMPLETE DROPDOWN ===== */
+.song-add-row {
+  display: flex;
+  gap: 0.5rem;
+  isolation: isolate;
+  margin-bottom: 1rem;
+  position: relative;
+  z-index: 20;
+}
+.song-add-input-wrap {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  z-index: 30;
+}
 .autocomplete-dropdown {
   position: absolute;
   top: 100%;
   left: 0;
   right: 0;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
+  background: #161b29;
+  border: 1px solid var(--accent-blue);
   border-radius: 0 0 8px 8px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-  max-height: 220px;
+  box-shadow: 0 18px 40px rgba(0,0,0,0.72);
+  max-height: 260px;
   overflow-y: auto;
-  z-index: 1000;
+  overscroll-behavior: contain;
+  z-index: 10000;
   margin-top: -2px; /* Pull up to touch the input */
+  opacity: 1;
 }
 .autocomplete-item {
+  background: #161b29;
   padding: 0.6rem 0.8rem;
   display: flex;
   align-items: center;
@@ -866,7 +908,7 @@ main {
   border-bottom: none;
 }
 .autocomplete-item:hover {
-  background: var(--bg-card);
+  background: #20283b;
 }
 .autocomplete-art {
   width: 36px;

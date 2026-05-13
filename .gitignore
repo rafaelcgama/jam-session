@@ -10,6 +10,7 @@ venv/
 jam.db
 jam.db-shm
 jam.db-wal
+jam.db.backup.*
 sqlite_mcp_server.db
 
 # IDE
