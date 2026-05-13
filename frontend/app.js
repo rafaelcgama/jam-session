@@ -216,8 +216,11 @@ function openInstantBandModal(title, roleMap) {
     const names = roleMap[role.id] || [];
     const badgesHtml = names.length > 0
       ? names.map(name => `
-          <span class="instant-band-badge"
-            style="color:${role.color};border-color:${role.color}55;background:${role.color}14">
+          <span class="instant-band-badge clickable-musician" data-musician="${encodeURIComponent(name)}"
+            style="color:${role.color};border-color:${role.color}55;background:${role.color}14;cursor:pointer;transition:transform 0.1s"
+            onmouseover="this.style.transform='scale(1.05)'"
+            onmouseout="this.style.transform='scale(1)'"
+            title="View ${name}'s profile">
             ${role.icon} ${name}
           </span>`).join('')
       : `<span class="instant-band-missing">⚠️ No one registered yet</span>`;
@@ -250,6 +253,18 @@ function openInstantBandModal(title, roleMap) {
 
   document.getElementById('modal-close-btn').addEventListener('click', closeModal);
   document.getElementById('modal-close-btn2').addEventListener('click', closeModal);
+  
+  // Route to the specific musician's profile in the Crew view
+  document.querySelectorAll('.clickable-musician').forEach(el => {
+    el.addEventListener('click', () => {
+      closeModal();
+      const mName = decodeURIComponent(el.dataset.musician);
+      document.getElementById('search-input').value = mName;
+      state.search = mName;
+      switchView('members');
+    });
+  });
+  
   openModal();
 }
 
