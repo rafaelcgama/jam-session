@@ -49,6 +49,12 @@ def create_musician(data: MusicianIn):
         raise HTTPException(status_code=400, detail="Name is required")
     if not data.roles:
         raise HTTPException(status_code=400, detail="At least one role is required")
+    
+    # Validate that every song has at least one instrument
+    for song_title, rids in data.songs.items():
+        if not rids:
+            raise HTTPException(status_code=400, detail=f"At least one instrument is required for '{song_title}'")
+
     if database.name_exists(name):
         raise HTTPException(status_code=409, detail=f'"{name}" is already in the session')
 
@@ -76,6 +82,11 @@ def update_musician(musician_id: str, data: MusicianIn):
         raise HTTPException(status_code=400, detail="Name is required")
     if not data.roles:
         raise HTTPException(status_code=400, detail="At least one role is required")
+
+    # Validate that every song has at least one instrument
+    for song_title, rids in data.songs.items():
+        if not rids:
+            raise HTTPException(status_code=400, detail=f"At least one instrument is required for '{song_title}'")
 
     sanitized_songs = {sanitize_song_key(k): v for k, v in data.songs.items() if k.strip()}
 
