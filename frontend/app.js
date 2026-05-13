@@ -612,7 +612,7 @@ function renderSongsEditor() {
             item.addEventListener('click', () => {
               input.value = item.dataset.title;
               dropdown.classList.add('hidden');
-              input.focus();
+              addSongFromInput();
             });
           });
         } catch (err) {
@@ -658,6 +658,14 @@ async function saveEdit() {
   const nameInput = document.getElementById('edit-name');
   const name = nameInput.value.trim();
   if (!name) { nameInput.focus(); toast('Please enter your name', 'error'); return; }
+
+  // If there's un-added text in the song input, try to add it first
+  const songInput = document.getElementById('song-input-new');
+  if (songInput && songInput.value.trim()) {
+    addSongFromInput();
+    // If it's still there, it means validation failed (e.g., no instrument selected). Stop saving.
+    if (songInput.value.trim()) return; 
+  }
 
   const saveBtn = document.getElementById('modal-save-btn');
   saveBtn.disabled = true;
