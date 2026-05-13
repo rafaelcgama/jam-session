@@ -260,14 +260,11 @@ function openInstantBandModal(title, roleMap) {
   document.getElementById('modal-close-btn').addEventListener('click', closeModal);
   document.getElementById('modal-close-btn2').addEventListener('click', closeModal);
   
-  // Route to the specific musician's profile in the Crew view
+  // Route to the specific musician's profile without changing the active view.
   document.querySelectorAll('.clickable-musician').forEach(el => {
     el.addEventListener('click', () => {
-      closeModal();
       const mName = decodeURIComponent(el.dataset.musician);
-      document.getElementById('search-input').value = mName;
-      state.search = mName;
-      switchView('members');
+      openMusicianProfileByName(mName);
     });
   });
   
@@ -549,6 +546,12 @@ function openViewModal(id) {
     setTimeout(() => openEditModal(id), 200);
   });
   openModal();
+}
+
+function openMusicianProfileByName(name) {
+  const musician = musicians.find(m => m.name.toLowerCase() === name.toLowerCase());
+  if (!musician) return;
+  openViewModal(musician.id);
 }
 
 // ===== ADD / EDIT MODAL =====
