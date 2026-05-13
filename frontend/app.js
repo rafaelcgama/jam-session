@@ -802,14 +802,14 @@ async function init() {
       filterBar.classList.remove('hidden');
       btnMembers.classList.add('active');
       btnSongbook.classList.remove('active');
-      searchInput.placeholder = 'Search musician or song…';
+      searchInput.placeholder = 'Search musician, band, or song…';
     } else {
       membersGrid.classList.add('hidden');
       songbookGrid.classList.remove('hidden');
       filterBar.classList.add('hidden');
       btnSongbook.classList.add('active');
       btnMembers.classList.remove('active');
-      searchInput.placeholder = 'Search songs…';
+      searchInput.placeholder = 'Search band or song…';
     }
     renderMusicians();
   }
