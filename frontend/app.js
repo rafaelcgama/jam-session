@@ -545,7 +545,7 @@ function openEditModal(id) {
   const m = musicians.find(x => x.id === id);
   if (!m) return;
   state.editingId = id;
-  state.editRoles = [];
+  state.editRoles = [...m.roles];
   state.editSongs = JSON.parse(JSON.stringify(m.songs));
   renderEditModal(`Edit: ${m.name}`);
   document.getElementById('edit-name').value = m.name;
@@ -791,9 +791,6 @@ function addSongFromInput() {
   if (!state.editSongs[val]) {
     state.editSongs[val] = [...state.editRoles];
   }
-  
-  // Clear selected instruments after adding the song
-  state.editRoles = [];
   
   input.value = '';
   renderRolesGrid();
