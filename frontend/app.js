@@ -148,11 +148,17 @@ function buildSongbook() {
   const book = {};
   for (const m of musicians) {
     for (const [title, rids] of Object.entries(m.songs)) {
-      if (q && !title.toLowerCase().includes(q)) continue;
+      const matchesTitle = title.toLowerCase().includes(q);
+      const matchesMusician = m.name.toLowerCase().includes(q);
+      
+      if (q && !matchesTitle && !matchesMusician) continue;
+      
       if (!book[title]) book[title] = {};
       for (const rid of rids) {
         if (!book[title][rid]) book[title][rid] = [];
-        book[title][rid].push(m.name);
+        if (!book[title][rid].includes(m.name)) {
+          book[title][rid].push(m.name);
+        }
       }
     }
   }
@@ -304,7 +310,19 @@ function renderBandbook() {
 
   const q = state.search.toLowerCase().trim();
   if (q) {
-    bandNames = bandNames.filter(b => b.toLowerCase().includes(q) || Object.keys(bandbook[b]).some(s => s.toLowerCase().includes(q)));
+    bandNames = bandNames.filter(b => {
+      const matchesBandName = b.toLowerCase().includes(q);
+      const matchesSong = Object.keys(bandbook[b]).some(s => s.toLowerCase().includes(q));
+      
+      // Check if any musician in this band matches the search query
+      const matchesMusician = Object.values(bandbook[b]).some(songRoles => {
+        return Object.values(songRoles).some(players => {
+          return players.some(p => p.toLowerCase().includes(q));
+        });
+      });
+      
+      return matchesBandName || matchesSong || matchesMusician;
+    });
   }
 
   if (bandNames.length === 0) {
@@ -942,6 +960,7 @@ async function init() {
     const btnSongbook  = document.getElementById('toggle-songbook');
     const btnBandbook  = document.getElementById('toggle-bandbook');
     const searchInput  = document.getElementById('search-input');
+    const titleText    = document.getElementById('section-title-text');
 
     // Reset visibility and active states
     membersGrid.classList.add('hidden');
@@ -951,6 +970,12 @@ async function init() {
     btnMembers.classList.remove('active');
     btnSongbook.classList.remove('active');
     btnBandbook.classList.remove('active');
+
+    if (titleText) {
+      if (view === 'members') titleText.textContent = 'The Crew';
+      else if (view === 'songbook') titleText.textContent = 'Songbook';
+      else if (view === 'bandbook') titleText.textContent = 'Bandbook';
+    }
 
     if (view === 'members') {
       membersGrid.classList.remove('hidden');
