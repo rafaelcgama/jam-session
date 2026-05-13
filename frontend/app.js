@@ -346,8 +346,8 @@ function openBandModal(bandName, songsMap) {
     }).join('');
 
     return `
-      <div style="background:var(--bg-tertiary);border-radius:6px;padding:0.75rem;margin-bottom:0.75rem">
-        <div style="font-weight:600;color:var(--text-primary);margin-bottom:0.5rem;font-size:1.05rem">${songName}</div>
+      <div class="band-modal-song" data-song="${encodeURIComponent(songName)}" style="background:var(--bg-tertiary);border-radius:6px;padding:0.75rem;margin-bottom:0.75rem;cursor:pointer;transition:background 0.2s">
+        <div style="font-weight:600;color:var(--text-primary);margin-bottom:0.5rem;font-size:1.05rem">${songName} <span style="font-size:0.8rem;color:var(--text-muted);font-weight:normal;float:right">View breakdown →</span></div>
         <div style="display:flex;flex-wrap:wrap;gap:0.4rem">${iconBadges}</div>
       </div>
     `;
@@ -371,6 +371,16 @@ function openBandModal(bandName, songsMap) {
 
   document.getElementById('modal-close-btn').addEventListener('click', closeModal);
   document.getElementById('modal-close-btn2').addEventListener('click', closeModal);
+  
+  // Attach click listeners to open the Instant Band breakdown
+  document.querySelectorAll('.band-modal-song').forEach(el => {
+    el.addEventListener('click', () => {
+      const sName = decodeURIComponent(el.dataset.song);
+      const fullTitle = bandName === "Originals / Unknown" ? sName : bandName + " - " + sName;
+      openInstantBandModal(fullTitle, songsMap[sName]);
+    });
+  });
+  
   openModal();
 }
 
