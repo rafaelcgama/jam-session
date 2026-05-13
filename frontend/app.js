@@ -276,7 +276,7 @@ function renderCard(m) {
       const rids = m.songs[title] || [];
       const icons = rids.map(rid => ROLE_MAP[rid]?.icon).filter(Boolean).join(' ');
       return `<div class="song-item" style="display:flex;justify-content:space-between;background:var(--bg-tertiary);padding:0.4rem 0.6rem;border-radius:4px;font-size:0.85rem">
-        <span class="song-title" style="font-weight:500">${title}</span> 
+        <span class="song-title">${formatSongTitle(title)}</span> 
         <span class="song-icons" style="letter-spacing:2px">${icons}</span>
       </div>`;
     }).join('');
@@ -348,7 +348,7 @@ function openViewModal(id) {
         return `<span class="inline-role-badge" style="color:${role.color};border:1px solid ${role.color}44;background:${role.color}11;padding:0.15rem 0.4rem;border-radius:12px;font-size:0.75rem;font-weight:600;display:inline-flex;align-items:center;gap:0.25rem" title="Instrument">${role.icon} ${role.label}</span>`;
       }).join('');
       return `<div class="detail-song-row" style="background:var(--bg-tertiary);padding:0.75rem;border-radius:6px;display:flex;flex-direction:column;gap:0.4rem">
-        <div class="ds-title" style="font-weight:600;font-size:1.05rem;color:var(--text-primary)">${title}</div>
+        <div class="ds-title" style="font-weight:600;font-size:1.05rem;color:var(--text-primary)">${formatSongTitle(title)}</div>
         <div class="ds-roles" style="display:flex;flex-wrap:wrap;gap:0.4rem">${roleBadges}</div>
       </div>`;
     }).join('');
@@ -506,7 +506,7 @@ function renderSongsEditor() {
       html += `
         <div class="songs-editor-block" style="background:var(--bg-tertiary);padding:0.75rem;border-radius:6px;display:flex;flex-direction:column;gap:0.5rem;position:relative">
           <button type="button" class="song-tag-remove" data-title="${title}" style="position:absolute;top:0.5rem;right:0.5rem;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1rem;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background 0.2s">✕</button>
-          <div class="song-title" style="font-weight:600;padding-right:1.5rem;color:var(--text-primary)">${title}</div>
+          ${formatSongTitle(title)}
           <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:-0.2rem">Instruments I play on this song:</div>
           <div class="song-role-toggles" style="display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center">
             ${roleBadges}
@@ -595,15 +595,18 @@ function renderSongsEditor() {
             return;
           }
 
-          dropdown.innerHTML = data.results.map(track => `
-            <div class="autocomplete-item" data-title="${track.trackName.replace(/"/g, '&quot;')}">
+          dropdown.innerHTML = data.results.map(track => {
+            const rawTitle = `${track.artistName} - ${track.trackName}`;
+            const safeTitle = rawTitle.replace(/"/g, '&quot;');
+            return `
+            <div class="autocomplete-item" data-title="${safeTitle}">
               <img src="${track.artworkUrl60}" class="autocomplete-art" alt="Album art" />
               <div class="autocomplete-text">
                 <div class="autocomplete-title">${track.trackName}</div>
                 <div class="autocomplete-artist">${track.artistName}</div>
               </div>
             </div>
-          `).join('');
+          `}).join('');
 
           dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
             item.addEventListener('click', () => {
@@ -741,6 +744,21 @@ function toast(msg, type = 'success') {
   el.innerHTML = `<span>${icon}</span> ${msg}`;
   document.getElementById('toast-container').appendChild(el);
   setTimeout(() => el.remove(), 3000);
+}
+
+// Helper to format "Artist - Title" strings beautifully
+function formatSongTitle(rawTitle) {
+  if (!rawTitle.includes(' - ')) {
+    return `<span class="song-title" style="font-weight:500;color:var(--text-primary)">${rawTitle}</span>`;
+  }
+  const [artist, ...titleParts] = rawTitle.split(' - ');
+  const title = titleParts.join(' - ');
+  return `
+    <div style="display:flex;flex-direction:column;line-height:1.1">
+      <span class="song-title" style="font-weight:600;color:var(--text-primary)">${title}</span>
+      <span class="song-artist" style="font-size:0.7rem;color:var(--text-muted)">${artist}</span>
+    </div>
+  `;
 }
 
 // ===== INIT =====
