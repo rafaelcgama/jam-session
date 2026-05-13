@@ -61,14 +61,40 @@ function getInitials(name) {
   return name.trim().split(/\s+/).map(w => w[0].toUpperCase()).slice(0, 2).join('');
 }
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[ch]));
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value);
+}
+
+function encodeDataValue(value) {
+  return encodeURIComponent(String(value ?? ''));
+}
+
+function decodeDataValue(value) {
+  return decodeURIComponent(value || '');
+}
+
+function normaliseSearch(value) {
+  return String(value ?? '').toLowerCase().trim();
+}
+
 // ===== FILTER =====
 function getFilteredMusicians() {
   let list = musicians;
-  const q = state.search.toLowerCase().trim();
+  const q = normaliseSearch(state.search);
   if (q) {
     list = list.filter(m => {
-      if (m.name.toLowerCase().includes(q)) return true;
-      return Object.keys(m.songs).some(s => s.toLowerCase().includes(q));
+      if (normaliseSearch(m.name).includes(q)) return true;
+      return Object.keys(m.songs).some(s => normaliseSearch(s).includes(q));
     });
   }
   if (state.filter !== 'all') {
@@ -143,13 +169,13 @@ function renderMusicians() {
  * Aggregates all unique songs from all musicians into a map:
  * { songTitle -> { roleId -> [musicianName, ...] } }
  */
-function buildSongbook() {
-  const q = state.search.toLowerCase().trim();
+function buildSongbookFrom(sourceMusicians, search = '') {
+  const q = normaliseSearch(search);
   const book = {};
-  for (const m of musicians) {
+  for (const m of sourceMusicians) {
     for (const [title, rids] of Object.entries(m.songs)) {
-      const matchesTitle = title.toLowerCase().includes(q);
-      const matchesMusician = m.name.toLowerCase().includes(q);
+      const matchesTitle = normaliseSearch(title).includes(q);
+      const matchesMusician = normaliseSearch(m.name).includes(q);
       
       if (q && !matchesTitle && !matchesMusician) continue;
       
@@ -163,6 +189,10 @@ function buildSongbook() {
     }
   }
   return book;
+}
+
+function buildSongbook() {
+  return buildSongbookFrom(musicians, state.search);
 }
 
 function renderSongbook() {
@@ -188,6 +218,7 @@ function renderSongbook() {
     const roleMap = book[title]; // { roleId -> [names] }
     const roleIds = Object.keys(roleMap);
     const totalPlayers = new Set(Object.values(roleMap).flat()).size;
+    const safeTitle = escapeHtml(title);
 
     const iconBadges = roleIds.map(rid => {
       const role = ROLE_MAP[rid];
@@ -199,9 +230,9 @@ function renderSongbook() {
     }).join('');
 
     return `
-      <div class="song-row" data-song="${encodeURIComponent(title)}">
+      <div class="song-row" data-song="${encodeDataValue(title)}">
         <div>
-          <div class="song-row-title">${title}</div>
+          <div class="song-row-title">${safeTitle}</div>
           <div class="song-row-meta">${totalPlayers} musician${totalPlayers !== 1 ? 's' : ''} · ${roleIds.length} instrument${roleIds.length !== 1 ? 's' : ''}</div>
         </div>
         <div class="song-row-icons">${iconBadges}</div>
@@ -210,24 +241,25 @@ function renderSongbook() {
 
   container.querySelectorAll('.song-row').forEach(row => {
     row.addEventListener('click', () => {
-      const title = decodeURIComponent(row.dataset.song);
+      const title = decodeDataValue(row.dataset.song);
       openInstantBandModal(title, book[title]);
     });
   });
 }
 
 function openInstantBandModal(title, roleMap) {
+  const safeTitle = escapeHtml(title);
   // Build the "Instant Band" breakdown — all ROLES in order, show who can play each
   const sectionsHtml = ROLES.map(role => {
     const names = roleMap[role.id] || [];
     const badgesHtml = names.length > 0
       ? names.map(name => `
-          <span class="instant-band-badge clickable-musician" data-musician="${encodeURIComponent(name)}"
+          <span class="instant-band-badge clickable-musician" data-musician="${encodeDataValue(name)}"
             style="color:${role.color};border-color:${role.color}55;background:${role.color}14;cursor:pointer;transition:transform 0.1s"
             onmouseover="this.style.transform='scale(1.05)'"
             onmouseout="this.style.transform='scale(1)'"
-            title="View ${name}'s profile">
-            ${role.icon} ${name}
+            title="View ${escapeAttr(name)}'s profile">
+            ${role.icon} ${escapeHtml(name)}
           </span>`).join('')
       : `<span class="instant-band-missing">⚠️ No one registered yet</span>`;
 
@@ -244,7 +276,7 @@ function openInstantBandModal(title, roleMap) {
   setModalContent(`
     <div class="modal-header">
       <div>
-        <div class="modal-title">🎵 ${title}</div>
+        <div class="modal-title">🎵 ${safeTitle}</div>
         <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.2rem">Instant Band</div>
       </div>
       <button class="modal-close" id="modal-close-btn">✕</button>
@@ -263,7 +295,7 @@ function openInstantBandModal(title, roleMap) {
   // Route to the specific musician's profile without changing the active view.
   document.querySelectorAll('.clickable-musician').forEach(el => {
     el.addEventListener('click', () => {
-      const mName = decodeURIComponent(el.dataset.musician);
+      const mName = decodeDataValue(el.dataset.musician);
       openMusicianProfileByName(mName);
     });
   });
@@ -272,9 +304,9 @@ function openInstantBandModal(title, roleMap) {
 }
 
 // ── Bandbook ────────────────────────────────────────────────────────────────
-function buildBandbook() {
+function buildBandbookFrom(sourceMusicians) {
   const bands = {};
-  musicians.forEach(m => {
+  sourceMusicians.forEach(m => {
     for (const [title, roles] of Object.entries(m.songs)) {
       let bandName = "Originals / Unknown";
       let songName = title;
@@ -298,6 +330,10 @@ function buildBandbook() {
   return bands;
 }
 
+function buildBandbook() {
+  return buildBandbookFrom(musicians);
+}
+
 function renderBandbook() {
   const container = document.getElementById('bandbook-grid');
   if (!container) return;
@@ -305,16 +341,16 @@ function renderBandbook() {
   const bandbook = buildBandbook();
   let bandNames = Object.keys(bandbook).sort((a, b) => a.localeCompare(b));
 
-  const q = state.search.toLowerCase().trim();
+  const q = normaliseSearch(state.search);
   if (q) {
     bandNames = bandNames.filter(b => {
-      const matchesBandName = b.toLowerCase().includes(q);
-      const matchesSong = Object.keys(bandbook[b]).some(s => s.toLowerCase().includes(q));
+      const matchesBandName = normaliseSearch(b).includes(q);
+      const matchesSong = Object.keys(bandbook[b]).some(s => normaliseSearch(s).includes(q));
       
       // Check if any musician in this band matches the search query
       const matchesMusician = Object.values(bandbook[b]).some(songRoles => {
         return Object.values(songRoles).some(players => {
-          return players.some(p => p.toLowerCase().includes(q));
+          return players.some(p => normaliseSearch(p).includes(q));
         });
       });
       
@@ -339,13 +375,14 @@ function renderBandbook() {
     Object.values(songs).forEach(roleMap => {
       Object.values(roleMap).flat().forEach(p => allPlayers.add(p));
     });
+    const safeBandName = escapeHtml(bandName);
     
     return `
-      <div class="song-row" data-band="${encodeURIComponent(bandName)}">
+      <div class="song-row" data-band="${encodeDataValue(bandName)}">
         <div style="display:flex;align-items:center;gap:1rem">
           <div style="font-size:1.5rem">🤘</div>
           <div>
-            <div class="song-row-title" style="font-size:1.1rem;color:var(--text-primary);font-weight:600">${bandName}</div>
+            <div class="song-row-title" style="font-size:1.1rem;color:var(--text-primary);font-weight:600">${safeBandName}</div>
             <div class="song-row-meta">${songCount} song${songCount !== 1 ? 's' : ''} · ${allPlayers.size} musician${allPlayers.size !== 1 ? 's' : ''}</div>
           </div>
         </div>
@@ -354,30 +391,32 @@ function renderBandbook() {
 
   container.querySelectorAll('.song-row').forEach(row => {
     row.addEventListener('click', () => {
-      const bandName = decodeURIComponent(row.dataset.band);
+      const bandName = decodeDataValue(row.dataset.band);
       openBandModal(bandName, bandbook[bandName]);
     });
   });
 }
 
 function openBandModal(bandName, songsMap) {
+  const safeBandName = escapeHtml(bandName);
   const songsHtml = Object.keys(songsMap).sort((a, b) => a.localeCompare(b)).map(songName => {
     const roleMap = songsMap[songName];
     const roleIds = Object.keys(roleMap);
+    const safeSongName = escapeHtml(songName);
     
     const iconBadges = roleIds.map(rid => {
       const role = ROLE_MAP[rid];
       if (!role) return '';
       const names = roleMap[rid].join(', ');
-      return `<span class="song-row-icon-badge" title="${names}"
+      return `<span class="song-row-icon-badge" title="${escapeAttr(names)}"
         style="color:${role.color};border-color:${role.color}55;background:${role.color}14">
         ${role.icon} ${role.label} (${roleMap[rid].length})
       </span>`;
     }).join('');
 
     return `
-      <div class="band-modal-song" data-song="${encodeURIComponent(songName)}" style="background:var(--bg-tertiary);border-radius:6px;padding:0.75rem;margin-bottom:0.75rem;cursor:pointer;transition:background 0.2s">
-        <div style="font-weight:600;color:var(--text-primary);margin-bottom:0.5rem;font-size:1.05rem">${songName} <span style="font-size:0.8rem;color:var(--text-muted);font-weight:normal;float:right">View breakdown →</span></div>
+      <div class="band-modal-song" data-song="${encodeDataValue(songName)}" style="background:var(--bg-tertiary);border-radius:6px;padding:0.75rem;margin-bottom:0.75rem;cursor:pointer;transition:background 0.2s">
+        <div style="font-weight:600;color:var(--text-primary);margin-bottom:0.5rem;font-size:1.05rem">${safeSongName} <span style="font-size:0.8rem;color:var(--text-muted);font-weight:normal;float:right">View breakdown →</span></div>
         <div style="display:flex;flex-wrap:wrap;gap:0.4rem">${iconBadges}</div>
       </div>
     `;
@@ -386,7 +425,7 @@ function openBandModal(bandName, songsMap) {
   setModalContent(`
     <div class="modal-header">
       <div>
-        <div class="modal-title">🤘 ${bandName}</div>
+        <div class="modal-title">🤘 ${safeBandName}</div>
         <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.2rem">Band Repertoire</div>
       </div>
       <button class="modal-close" id="modal-close-btn">✕</button>
@@ -405,7 +444,7 @@ function openBandModal(bandName, songsMap) {
   // Attach click listeners to open the Instant Band breakdown
   document.querySelectorAll('.band-modal-song').forEach(el => {
     el.addEventListener('click', () => {
-      const sName = decodeURIComponent(el.dataset.song);
+      const sName = decodeDataValue(el.dataset.song);
       const fullTitle = bandName === "Originals / Unknown" ? sName : bandName + " - " + sName;
       openInstantBandModal(fullTitle, songsMap[sName]);
     });
@@ -416,6 +455,7 @@ function openBandModal(bandName, songsMap) {
 
 function renderCard(m) {
   const accentColor = ROLE_MAP[m.roles[0]]?.color || '#5b8cff';
+  const safeName = escapeHtml(m.name);
 
   const rolesHtml = m.roles.map(rid => {
     const role = ROLE_MAP[rid];
@@ -451,14 +491,14 @@ function renderCard(m) {
   const songCount = songKeys.length;
 
   return `
-    <div class="musician-card" data-id="${m.id}" data-name="${m.name}"
+    <div class="musician-card" data-id="${escapeAttr(m.id)}" data-name="${escapeAttr(m.name)}"
          style="--accent-color:${accentColor}22">
       <div class="card-header">
         <div class="avatar" style="background:${accentColor}22;color:${accentColor}">
-          ${getInitials(m.name)}
+          ${escapeHtml(getInitials(m.name))}
         </div>
         <div>
-          <div class="card-name">${m.name}</div>
+          <div class="card-name">${safeName}</div>
           <div class="card-meta">${songCount} song${songCount !== 1 ? 's' : ''} · ${m.roles.length} instrument${m.roles.length !== 1 ? 's' : ''}</div>
         </div>
       </div>
@@ -494,6 +534,7 @@ function openViewModal(id) {
   const m = musicians.find(x => x.id === id);
   if (!m) return;
   const accentColor = ROLE_MAP[m.roles[0]]?.color || '#5b8cff';
+  const safeName = escapeHtml(m.name);
 
   const songKeys = Object.keys(m.songs);
   
@@ -523,10 +564,10 @@ function openViewModal(id) {
     <div class="modal-header">
       <div style="display:flex;align-items:center;gap:0.75rem">
         <div class="avatar" style="background:${accentColor}22;color:${accentColor}">
-          ${getInitials(m.name)}
+          ${escapeHtml(getInitials(m.name))}
         </div>
         <div>
-          <div class="modal-title">${m.name}</div>
+          <div class="modal-title">${safeName}</div>
           <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.1rem">
             ${songCount} song${songCount !== 1 ? 's' : ''} · ${m.roles.length} instrument${m.roles.length !== 1 ? 's' : ''}
           </div>
@@ -549,7 +590,7 @@ function openViewModal(id) {
 }
 
 function openMusicianProfileByName(name) {
-  const musician = musicians.find(m => m.name.toLowerCase() === name.toLowerCase());
+  const musician = musicians.find(m => normaliseSearch(m.name) === normaliseSearch(name));
   if (!musician) return;
   openViewModal(musician.id);
 }
@@ -575,7 +616,7 @@ function openEditModal(id) {
 function renderEditModal(title) {
   setModalContent(`
     <div class="modal-header">
-      <div class="modal-title">${title}</div>
+      <div class="modal-title">${escapeHtml(title)}</div>
       <button class="modal-close" id="modal-close-btn">✕</button>
     </div>
 
@@ -656,16 +697,17 @@ function renderSongsEditor() {
     html += `<div class="songs-editor-list" style="display:flex;flex-direction:column;gap:0.5rem">`;
     songs.forEach(title => {
       const rids = state.editSongs[title] || [];
+      const encodedTitle = encodeDataValue(title);
       
       const roleBadges = rids.map(rid => {
         const role = ROLE_MAP[rid];
         if (!role) return '';
-        return `<span class="mini-role-badge" data-title="${title}" data-role="${rid}" style="background:${role.color};color:#fff;border-radius:4px;padding:0.15rem 0.4rem;font-size:0.75rem;cursor:pointer;display:inline-flex;align-items:center;gap:0.3rem" title="Remove role">${role.icon} ${role.label} <span style="font-size:0.6rem;opacity:0.7">✕</span></span>`;
+        return `<span class="mini-role-badge" data-title="${encodedTitle}" data-role="${rid}" style="background:${role.color};color:#fff;border-radius:4px;padding:0.15rem 0.4rem;font-size:0.75rem;cursor:pointer;display:inline-flex;align-items:center;gap:0.3rem" title="Remove role">${role.icon} ${role.label} <span style="font-size:0.6rem;opacity:0.7">✕</span></span>`;
       }).join('');
       
       const availableRoles = ROLES.map(r => r.id).filter(rid => !rids.includes(rid));
       const addSelectHtml = availableRoles.length > 0 ? `
-        <select class="song-role-select" data-title="${title}" style="background:transparent;border:1px dashed var(--text-muted);color:var(--text-primary);border-radius:4px;padding:0.1rem 0.3rem;font-size:0.75rem;cursor:pointer;outline:none">
+        <select class="song-role-select" data-title="${encodedTitle}" style="background:transparent;border:1px dashed var(--text-muted);color:var(--text-primary);border-radius:4px;padding:0.1rem 0.3rem;font-size:0.75rem;cursor:pointer;outline:none">
           <option value="">+ Add Instrument</option>
           ${availableRoles.map(r => `<option value="${r}">${ROLE_MAP[r].label}</option>`).join('')}
         </select>
@@ -673,7 +715,7 @@ function renderSongsEditor() {
       
       html += `
         <div class="songs-editor-block" style="background:var(--bg-tertiary);padding:0.75rem;border-radius:6px;display:flex;flex-direction:column;gap:0.5rem;position:relative">
-          <button type="button" class="song-tag-remove" data-title="${title}" style="position:absolute;top:0.5rem;right:0.5rem;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1rem;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background 0.2s">✕</button>
+          <button type="button" class="song-tag-remove" data-title="${encodedTitle}" style="position:absolute;top:0.5rem;right:0.5rem;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1rem;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background 0.2s">✕</button>
           ${formatSongTitle(title)}
           <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:-0.2rem">Instruments I play on this song:</div>
           <div class="song-role-toggles" style="display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center">
@@ -695,14 +737,14 @@ function renderSongsEditor() {
 
   editor.querySelectorAll('.song-tag-remove').forEach(btn => {
     btn.addEventListener('click', () => {
-      delete state.editSongs[btn.dataset.title];
+      delete state.editSongs[decodeDataValue(btn.dataset.title)];
       renderSongsEditor();
     });
   });
 
   editor.querySelectorAll('.mini-role-badge').forEach(badge => {
     badge.addEventListener('click', () => {
-      const title = badge.dataset.title;
+      const title = decodeDataValue(badge.dataset.title);
       const rid = badge.dataset.role;
       state.editSongs[title] = state.editSongs[title].filter(r => r !== rid);
       renderSongsEditor();
@@ -712,7 +754,7 @@ function renderSongsEditor() {
   editor.querySelectorAll('.song-role-select').forEach(select => {
     select.addEventListener('change', () => {
       if (!select.value) return;
-      const title = select.dataset.title;
+      const title = decodeDataValue(select.dataset.title);
       const rid = select.value;
       if (!state.editSongs[title]) state.editSongs[title] = [];
       if (!state.editSongs[title].includes(rid)) {
@@ -764,21 +806,23 @@ function renderSongsEditor() {
           }
 
           dropdown.innerHTML = data.results.map(track => {
-            const rawTitle = `${track.artistName} - ${track.trackName}`;
-            const safeTitle = rawTitle.replace(/"/g, '&quot;');
+            const artistName = track.artistName || 'Unknown Artist';
+            const trackName = track.trackName || 'Unknown Song';
+            const rawTitle = `${artistName} - ${trackName}`;
+            const artworkUrl = track.artworkUrl60 || '';
             return `
-            <div class="autocomplete-item" data-title="${safeTitle}">
-              <img src="${track.artworkUrl60}" class="autocomplete-art" alt="Album art" />
+            <div class="autocomplete-item" data-title="${encodeDataValue(rawTitle)}">
+              <img src="${escapeAttr(artworkUrl)}" class="autocomplete-art" alt="Album art" />
               <div class="autocomplete-text">
-                <div class="autocomplete-title">${track.trackName}</div>
-                <div class="autocomplete-artist">${track.artistName}</div>
+                <div class="autocomplete-title">${escapeHtml(trackName)}</div>
+                <div class="autocomplete-artist">${escapeHtml(artistName)}</div>
               </div>
             </div>
           `}).join('');
 
           dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
             item.addEventListener('click', () => {
-              input.value = item.dataset.title;
+              input.value = decodeDataValue(item.dataset.title);
               dropdown.classList.add('hidden');
               addSongFromInput();
             });
@@ -914,7 +958,9 @@ function toast(msg, type = 'success') {
   const icon = type === 'success' ? '✅' : '⚠️';
   const el = document.createElement('div');
   el.className = `toast ${type}`;
-  el.innerHTML = `<span>${icon}</span> ${msg}`;
+  const iconEl = document.createElement('span');
+  iconEl.textContent = icon;
+  el.append(iconEl, ` ${msg}`);
   document.getElementById('toast-container').appendChild(el);
   setTimeout(() => el.remove(), 3000);
 }
@@ -922,14 +968,14 @@ function toast(msg, type = 'success') {
 // Helper to format "Artist - Title" strings beautifully
 function formatSongTitle(rawTitle) {
   if (!rawTitle.includes(' - ')) {
-    return `<span class="song-title" style="font-weight:500;color:var(--text-primary)">${rawTitle}</span>`;
+    return `<span class="song-title" style="font-weight:500;color:var(--text-primary)">${escapeHtml(rawTitle)}</span>`;
   }
   const [artist, ...titleParts] = rawTitle.split(' - ');
   const title = titleParts.join(' - ');
   return `
     <div style="display:flex;flex-direction:column;line-height:1.1">
-      <span class="song-title" style="font-weight:600;color:var(--text-primary)">${title}</span>
-      <span class="song-artist" style="font-size:0.7rem;color:var(--text-muted)">${artist}</span>
+      <span class="song-title" style="font-weight:600;color:var(--text-primary)">${escapeHtml(title)}</span>
+      <span class="song-artist" style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(artist)}</span>
     </div>
   `;
 }
@@ -1014,4 +1060,20 @@ async function init() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', init);
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', init);
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    buildBandbookFrom,
+    buildSongbookFrom,
+    decodeDataValue,
+    encodeDataValue,
+    escapeAttr,
+    escapeHtml,
+    formatSongTitle,
+    getInitials,
+    normaliseSearch,
+  };
+}

@@ -8,12 +8,16 @@ A lightweight web app for jam session musicians to register their name, instrume
 
 ## ✨ Features
 
-- Add musicians to the session with their name and instruments
-- List the songs a musician plays, with the specific instrument for each song
-- View, edit, or remove any musician's profile
-- Search musicians by name or song
-- Filter the grid by instrument
-- Song-first data model — add a song once, assign multiple instruments to it
+- Add musicians with their name, instruments, and song repertoire
+- View, edit, or remove any musician's profile from the crew grid
+- Filter the crew by instrument and search by musician or song
+- Songbook tab that groups all registered songs and shows who can play each instrument
+- Bandbook tab that groups songs by artist/band from `Artist - Song` titles
+- Instant Band breakdowns for a song, with clickable musician badges that open the artist profile without leaving Songbook or Bandbook
+- iTunes-powered song autocomplete when adding repertoire, while still allowing custom titles
+- Song-first data model: add a song once, assign multiple instruments to it
+- Server-side validation for duplicate names, unknown instruments, blank song titles, and songs without instruments
+- Safer frontend rendering for user-provided names, band names, and song titles
 - Fully responsive and mobile-friendly
 
 ---
@@ -44,7 +48,9 @@ jam-session/
 │   ├── style.css     # Styling
 │   └── app.js        # All UI logic (rendering, modals, API calls)
 └── tests/
-    └── test_api.py   # Unit & integration tests
+    ├── frontend.test.js  # Frontend unit tests using Node's built-in test runner
+    ├── test_api.py       # Backend unit & integration tests
+    └── test_frontend.py  # Pytest wrapper for the frontend test suite
 ```
 
 ---
@@ -79,18 +85,26 @@ The app will be available at **[http://localhost:3000](http://localhost:3000)**.
 
 ## 🧪 Running Tests
 
-Tests use `pytest` with FastAPI's `TestClient`. Each test runs against an isolated, ephemeral SQLite database so your real data is never touched.
+Tests use `pytest` with FastAPI's `TestClient`. Each backend test runs against an isolated, ephemeral SQLite database so your real data is never touched. Frontend unit tests use Node's built-in test runner and are invoked by `pytest`.
 
 ```bash
 # Install test dependencies (first time only)
 pip install -r requirements.txt
 
-# Run all tests
+# Run all backend and frontend tests
 pytest tests/ -v
+
+# Run only frontend unit tests
+node --test tests/frontend.test.js
+
+# Check JavaScript syntax
+node --check frontend/app.js
 
 # Run with a coverage report
 pytest tests/ -v --tb=short
 ```
+
+Current coverage focuses on API validation, database helpers, Songbook/Bandbook grouping, frontend escaping, and dataset encoding helpers.
 
 ---
 
@@ -118,6 +132,15 @@ All endpoints are prefixed with `/api`.
   }
 }
 ```
+
+### Validation Rules
+
+- `name` is required and must be unique case-insensitively.
+- `roles` must include at least one known instrument.
+- Song titles must contain visible text after sanitization.
+- Every song must include at least one known instrument.
+- Duplicate role IDs are removed while preserving order.
+- Song instruments are merged into the profile's role list so profile cards and song breakdowns stay consistent.
 
 ---
 
@@ -168,6 +191,8 @@ CREATE TABLE musicians (
 
 | Version | Description                                             |
 |---------|---------------------------------------------------------|
+| `v1.2.0` | Songbook and Bandbook polish, profile links from song/band breakdowns, safer frontend rendering, stricter API validation, frontend unit tests |
+| `v1.1.0` | Songbook/Bandbook views, musician search improvements, iTunes autocomplete, dynamic section titles |
 | `v1.0.0` | Initial production release — song-first data model, live on GCP |
 
 ---

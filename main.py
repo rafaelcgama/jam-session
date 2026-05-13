@@ -5,7 +5,7 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 import database
 
@@ -25,7 +25,27 @@ class MusicianIn(BaseModel):
     name: str
     colorIdx: int = 0
     roles: list[str]
-    songs: dict[str, list[str]] = {}
+    songs: dict[str, list[str]] = Field(default_factory=dict)
+
+
+VALID_ROLE_IDS = {
+    "singer",
+    "guitarist",
+    "bassist",
+    "drummer",
+    "keys",
+    "harmonica",
+    "violinist",
+    "flutist",
+    "ukulele",
+    "horn",
+    "cello",
+    "saxophone",
+    "percussion",
+    "accordion",
+    "banjo",
+    "synth",
+}
 
 
 # ── API routes (must be declared BEFORE the static-file mount) ────────────────
@@ -38,8 +58,47 @@ def get_musicians():
 
 def sanitize_song_key(key: str) -> str:
     """Sanitizes 'Artist - Title' or 'Title' into Title Case."""
-    parts = [p.strip().title() for p in key.split("-")]
+    parts = [p.strip().title() for p in key.split("-") if p.strip()]
     return " - ".join(parts)
+
+
+def unique_roles(role_ids: list[str]) -> list[str]:
+    """Validate and de-duplicate role IDs while preserving the user's order."""
+    roles: list[str] = []
+    for role_id in role_ids:
+        if role_id not in VALID_ROLE_IDS:
+            raise HTTPException(status_code=400, detail=f"Unknown role: {role_id}")
+        if role_id not in roles:
+            roles.append(role_id)
+    return roles
+
+
+def sanitize_songs(songs: dict[str, list[str]]) -> dict[str, list[str]]:
+    sanitized: dict[str, list[str]] = {}
+    for raw_title, role_ids in songs.items():
+        title = sanitize_song_key(raw_title)
+        if not title:
+            raise HTTPException(status_code=400, detail="Song title is required")
+        if not role_ids:
+            raise HTTPException(status_code=400, detail=f"At least one instrument is required for '{title}'")
+
+        roles = unique_roles(role_ids)
+        if title not in sanitized:
+            sanitized[title] = []
+        for role_id in roles:
+            if role_id not in sanitized[title]:
+                sanitized[title].append(role_id)
+
+    return sanitized
+
+
+def merge_song_roles(profile_roles: list[str], songs: dict[str, list[str]]) -> list[str]:
+    roles = list(profile_roles)
+    for song_roles in songs.values():
+        for role_id in song_roles:
+            if role_id not in roles:
+                roles.append(role_id)
+    return roles
 
 @app.post("/api/musicians", status_code=201, summary="Add a new musician")
 def create_musician(data: MusicianIn):
@@ -49,22 +108,19 @@ def create_musician(data: MusicianIn):
         raise HTTPException(status_code=400, detail="Name is required")
     if not data.roles:
         raise HTTPException(status_code=400, detail="At least one role is required")
-    
-    # Validate that every song has at least one instrument
-    for song_title, rids in data.songs.items():
-        if not rids:
-            raise HTTPException(status_code=400, detail=f"At least one instrument is required for '{song_title}'")
 
     if database.name_exists(name):
         raise HTTPException(status_code=409, detail=f'"{name}" is already in the session')
 
-    sanitized_songs = {sanitize_song_key(k): v for k, v in data.songs.items() if k.strip()}
+    roles = unique_roles(data.roles)
+    sanitized_songs = sanitize_songs(data.songs)
+    roles = merge_song_roles(roles, sanitized_songs)
 
     musician = {
         "id":       str(uuid.uuid4()),
         "name":     name,
         "colorIdx": data.colorIdx,
-        "roles":    data.roles,
+        "roles":    roles,
         "songs":    sanitized_songs,
         "joinedAt": str(date.today()),
     }
@@ -82,18 +138,17 @@ def update_musician(musician_id: str, data: MusicianIn):
         raise HTTPException(status_code=400, detail="Name is required")
     if not data.roles:
         raise HTTPException(status_code=400, detail="At least one role is required")
+    if database.name_exists(name, exclude_id=musician_id):
+        raise HTTPException(status_code=409, detail=f'"{name}" is already in the session')
 
-    # Validate that every song has at least one instrument
-    for song_title, rids in data.songs.items():
-        if not rids:
-            raise HTTPException(status_code=400, detail=f"At least one instrument is required for '{song_title}'")
-
-    sanitized_songs = {sanitize_song_key(k): v for k, v in data.songs.items() if k.strip()}
+    roles = unique_roles(data.roles)
+    sanitized_songs = sanitize_songs(data.songs)
+    roles = merge_song_roles(roles, sanitized_songs)
 
     return database.update(musician_id, {
         "name":     name,
         "colorIdx": data.colorIdx,
-        "roles":    data.roles,
+        "roles":    roles,
         "songs":    sanitized_songs,
     })
 

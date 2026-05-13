@@ -105,6 +105,51 @@ class TestCreateMusician:
         assert res.status_code == 201
         assert res.json()["name"] == "Carlos"
 
+    def test_rejects_unknown_profile_role(self, client):
+        res = client.post("/api/musicians", json={"name": "Carlos", "roles": ["triangle"], "songs": {}})
+        assert res.status_code == 400
+        assert "Unknown role" in res.json()["detail"]
+
+    def test_rejects_unknown_song_role(self, client):
+        res = client.post("/api/musicians", json={
+            "name": "Carlos",
+            "roles": ["guitarist"],
+            "songs": {"Wonderwall": ["guitarist", "triangle"]},
+        })
+        assert res.status_code == 400
+        assert "Unknown role" in res.json()["detail"]
+
+    def test_rejects_blank_song_title(self, client):
+        res = client.post("/api/musicians", json={
+            "name": "Carlos",
+            "roles": ["guitarist"],
+            "songs": {" - ": ["guitarist"]},
+        })
+        assert res.status_code == 400
+        assert "Song title is required" in res.json()["detail"]
+
+    def test_deduplicates_roles_and_sanitised_song_keys(self, client):
+        res = client.post("/api/musicians", json={
+            "name": "Carlos",
+            "roles": ["guitarist", "guitarist"],
+            "songs": {
+                "radiohead - creep": ["guitarist"],
+                "Radiohead - Creep": ["singer", "guitarist"],
+            },
+        })
+        assert res.status_code == 201
+        assert res.json()["roles"] == ["guitarist", "singer"]
+        assert res.json()["songs"] == {"Radiohead - Creep": ["guitarist", "singer"]}
+
+    def test_adds_song_roles_to_profile_roles(self, client):
+        res = client.post("/api/musicians", json={
+            "name": "Carlos",
+            "roles": ["singer"],
+            "songs": {"Wonderwall": ["guitarist"]},
+        })
+        assert res.status_code == 201
+        assert res.json()["roles"] == ["singer", "guitarist"]
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PUT /api/musicians/{id}
@@ -150,6 +195,17 @@ class TestUpdateMusician:
             "name": "Carlos", "colorIdx": 0, "roles": [], "songs": {}
         })
         assert res.status_code == 400
+
+    def test_rejects_duplicate_name_on_update(self, client):
+        create_musician(client, name="Carlos")
+        sofia_id = create_musician(client, name="Sofia").json()["id"]
+
+        res = client.put(f"/api/musicians/{sofia_id}", json={
+            "name": "carlos", "colorIdx": 0, "roles": ["singer"], "songs": {}
+        })
+
+        assert res.status_code == 409
+        assert "already in the session" in res.json()["detail"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
