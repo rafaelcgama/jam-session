@@ -131,7 +131,7 @@ function renderMusicians() {
     grid.innerHTML = `
       <div class="empty-state" style="grid-column:1/-1">
         <div class="empty-icon">🎼</div>
-        <div class="empty-title">No musicians found</div>
+        <div class="empty-title">No members found</div>
         <p class="empty-desc">Try a different search or be the first to join!</p>
       </div>`;
     return;
@@ -233,7 +233,7 @@ function renderSongbook() {
       <div class="song-row" data-song="${encodeDataValue(title)}">
         <div>
           <div class="song-row-title">${safeTitle}</div>
-          <div class="song-row-meta">${totalPlayers} musician${totalPlayers !== 1 ? 's' : ''} · ${roleIds.length} instrument${roleIds.length !== 1 ? 's' : ''}</div>
+          <div class="song-row-meta">${totalPlayers} member${totalPlayers !== 1 ? 's' : ''} · ${roleIds.length} instrument${roleIds.length !== 1 ? 's' : ''}</div>
         </div>
         <div class="song-row-icons">${iconBadges}</div>
       </div>`;
@@ -292,7 +292,7 @@ function openInstantBandModal(title, roleMap) {
   document.getElementById('modal-close-btn').addEventListener('click', closeModal);
   document.getElementById('modal-close-btn2').addEventListener('click', closeModal);
   
-  // Route to the specific musician's profile without changing the active view.
+  // Route to the specific member's profile without changing the active view.
   document.querySelectorAll('.clickable-musician').forEach(el => {
     el.addEventListener('click', () => {
       const mName = decodeDataValue(el.dataset.musician);
@@ -347,7 +347,7 @@ function renderBandbook() {
       const matchesBandName = normaliseSearch(b).includes(q);
       const matchesSong = Object.keys(bandbook[b]).some(s => normaliseSearch(s).includes(q));
       
-      // Check if any musician in this band matches the search query
+      // Check if any member in this band matches the search query
       const matchesMusician = Object.values(bandbook[b]).some(songRoles => {
         return Object.values(songRoles).some(players => {
           return players.some(p => normaliseSearch(p).includes(q));
@@ -383,7 +383,7 @@ function renderBandbook() {
           <div style="font-size:1.5rem">🤘</div>
           <div>
             <div class="song-row-title" style="font-size:1.1rem;color:var(--text-primary);font-weight:600">${safeBandName}</div>
-            <div class="song-row-meta">${songCount} song${songCount !== 1 ? 's' : ''} · ${allPlayers.size} musician${allPlayers.size !== 1 ? 's' : ''}</div>
+            <div class="song-row-meta">${songCount} song${songCount !== 1 ? 's' : ''} · ${allPlayers.size} member${allPlayers.size !== 1 ? 's' : ''}</div>
           </div>
         </div>
       </div>`;
@@ -1030,7 +1030,7 @@ async function init() {
       membersGrid.classList.remove('hidden');
       filterBar.classList.remove('hidden');
       btnMembers.classList.add('active');
-      searchInput.placeholder = 'Search musician, band, or song…';
+      searchInput.placeholder = 'Search member, band, or song…';
     } else if (view === 'songbook') {
       songbookGrid.classList.remove('hidden');
       btnSongbook.classList.add('active');

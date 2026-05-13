@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>JAM Session - Digital Nomads FLN</title>
-  <meta name="description" content="Know who plays what at the jam session. Browse musicians, their instruments, and the songs they perform." />
-  <link rel="stylesheet" href="style.css?v=6" />
+  <meta name="description" content="Know who plays what at the jam session. Browse members, their instruments, and the songs they perform." />
+  <link rel="stylesheet" href="style.css?v=7" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎼</text></svg>" />
 </head>
 <body>
@@ -23,12 +23,12 @@
 
       <div class="search-wrapper">
         <span class="search-icon">🔍</span>
-        <input id="search-input" type="text" placeholder="Search musician, band, or song…" />
+        <input id="search-input" type="text" placeholder="Search member, band, or song…" />
       </div>
 
       <div class="header-actions">
         <button id="add-member-btn" class="btn btn-primary">
-          + Add Musician
+          + Add Member
         </button>
       </div>
     </div>
@@ -42,7 +42,7 @@
         <span class="section-count"></span>
       </h1>
       <div class="view-toggle" id="view-toggle">
-        <button class="toggle-btn active" id="toggle-members">🎸 The Crew</button>
+        <button class="toggle-btn active" id="toggle-members">🎼 The Crew</button>
         <button class="toggle-btn" id="toggle-songbook">📖 Songbook</button>
         <button class="toggle-btn" id="toggle-bandbook">🤘 Bandbook</button>
       </div>
@@ -51,7 +51,7 @@
     <!-- Role filter chips (hidden in song/bandbook view) -->
     <div class="filter-bar" id="filter-bar" role="group" aria-label="Filter by role"></div>
 
-    <!-- Musicians grid -->
+    <!-- Members grid -->
     <div class="musicians-grid" id="musicians-grid" role="list"></div>
 
     <!-- Songbook grid (hidden by default) -->
@@ -71,6 +71,6 @@
   <!-- ===== TOASTS ===== -->
   <div class="toast-container" id="toast-container" aria-live="polite"></div>
 
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

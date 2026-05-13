@@ -1,6 +1,6 @@
 # 🎸 Jam Session — Who Plays What
 
-A lightweight web app for jam session musicians to register their name, instruments, and the songs they play. Built for the **Digital Nomads FLN** community.
+A lightweight web app for jam session members to register their name, instruments, and the songs they play. Built for the **Digital Nomads FLN** community.
 
 **Live App:** [https://dnomads-jam-fln.duckdns.org](https://dnomads-jam-fln.duckdns.org)
 
@@ -8,12 +8,12 @@ A lightweight web app for jam session musicians to register their name, instrume
 
 ## ✨ Features
 
-- Add musicians with their name, instruments, and song repertoire
-- View, edit, or remove any musician's profile from the crew grid
-- Filter the crew by instrument and search by musician or song
+- Add members with their name, instruments, and song repertoire
+- View, edit, or remove any member's profile from the crew grid
+- Filter the crew by instrument and search by member or song
 - Songbook tab that groups all registered songs and shows who can play each instrument
 - Bandbook tab that groups songs by artist/band from `Artist - Song` titles
-- Instant Band breakdowns for a song, with clickable musician badges that open the artist profile without leaving Songbook or Bandbook
+- Instant Band breakdowns for a song, with clickable member badges that open the member profile without leaving Songbook or Bandbook
 - iTunes-powered song autocomplete when adding repertoire, while still allowing custom titles
 - Song-first data model: add a song once, assign multiple instruments to it
 - Server-side validation for duplicate names, unknown instruments, blank song titles, and songs without instruments
@@ -114,12 +114,12 @@ All endpoints are prefixed with `/api`.
 
 | Method   | Endpoint                        | Description                   |
 |----------|---------------------------------|-------------------------------|
-| `GET`    | `/api/musicians`                | List all musicians            |
-| `POST`   | `/api/musicians`                | Add a new musician            |
-| `PUT`    | `/api/musicians/{musician_id}`  | Update an existing musician   |
-| `DELETE` | `/api/musicians/{musician_id}`  | Remove a musician             |
+| `GET`    | `/api/musicians`                | List all members              |
+| `POST`   | `/api/musicians`                | Add a new member              |
+| `PUT`    | `/api/musicians/{musician_id}`  | Update an existing member     |
+| `DELETE` | `/api/musicians/{musician_id}`  | Remove a member               |
 
-### Musician Schema
+### Member Schema
 
 ```json
 {
@@ -192,7 +192,7 @@ CREATE TABLE musicians (
 | Version | Description                                             |
 |---------|---------------------------------------------------------|
 | `v1.2.0` | Songbook and Bandbook polish, profile links from song/band breakdowns, safer frontend rendering, stricter API validation, frontend unit tests |
-| `v1.1.0` | Songbook/Bandbook views, musician search improvements, iTunes autocomplete, dynamic section titles |
+| `v1.1.0` | Songbook/Bandbook views, member search improvements, iTunes autocomplete, dynamic section titles |
 | `v1.0.0` | Initial production release — song-first data model, live on GCP |
 
 ---

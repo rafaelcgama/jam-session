@@ -50,9 +50,9 @@ VALID_ROLE_IDS = {
 
 # ── API routes (must be declared BEFORE the static-file mount) ────────────────
 
-@app.get("/api/musicians", summary="List all musicians")
+@app.get("/api/musicians", summary="List all members")
 def get_musicians():
-    """Return every musician with their roles and songs."""
+    """Return every member with their roles and songs."""
     return database.get_all()
 
 
@@ -100,7 +100,7 @@ def merge_song_roles(profile_roles: list[str], songs: dict[str, list[str]]) -> l
                 roles.append(role_id)
     return roles
 
-@app.post("/api/musicians", status_code=201, summary="Add a new musician")
+@app.post("/api/musicians", status_code=201, summary="Add a new member")
 def create_musician(data: MusicianIn):
     """Register a new member of the jam session."""
     name = data.name.strip()
@@ -127,11 +127,11 @@ def create_musician(data: MusicianIn):
     return database.create(musician)
 
 
-@app.put("/api/musicians/{musician_id}", summary="Update a musician's profile")
+@app.put("/api/musicians/{musician_id}", summary="Update a member's profile")
 def update_musician(musician_id: str, data: MusicianIn):
-    """Edit an existing musician's name, roles, or songs."""
+    """Edit an existing member's name, roles, or songs."""
     if not database.get_by_id(musician_id):
-        raise HTTPException(status_code=404, detail="Musician not found")
+        raise HTTPException(status_code=404, detail="Member not found")
 
     name = data.name.strip()
     if not name:
@@ -153,11 +153,11 @@ def update_musician(musician_id: str, data: MusicianIn):
     })
 
 
-@app.delete("/api/musicians/{musician_id}", summary="Remove a musician")
+@app.delete("/api/musicians/{musician_id}", summary="Remove a member")
 def delete_musician(musician_id: str):
     """Remove a member from the jam session."""
     if not database.get_by_id(musician_id):
-        raise HTTPException(status_code=404, detail="Musician not found")
+        raise HTTPException(status_code=404, detail="Member not found")
     database.delete(musician_id)
     return {"success": True}
 
