@@ -90,6 +90,7 @@ function showGridLoading() {
 function renderMusicians() {
   // Dispatch to the correct view
   if (state.view === 'songbook') { renderSongbook(); return; }
+  if (state.view === 'bandbook') { renderBandbook(); return; }
 
   const grid = document.getElementById('musicians-grid');
   const list = getFilteredMusicians();
@@ -241,6 +242,127 @@ function openInstantBandModal(title, roleMap) {
     </div>
     <div style="padding:0 0.25rem">
       ${sectionsHtml}
+    </div>
+    <div style="margin-top:1.5rem;text-align:right">
+      <button class="btn btn-secondary" id="modal-close-btn2">Close</button>
+    </div>
+  `);
+
+  document.getElementById('modal-close-btn').addEventListener('click', closeModal);
+  document.getElementById('modal-close-btn2').addEventListener('click', closeModal);
+  openModal();
+}
+
+// ── Bandbook ────────────────────────────────────────────────────────────────
+function buildBandbook() {
+  const bands = {};
+  musicians.forEach(m => {
+    for (const [title, roles] of Object.entries(m.songs)) {
+      let bandName = "Originals / Unknown";
+      let songName = title;
+      if (title.includes(' - ')) {
+        const parts = title.split(' - ');
+        bandName = parts[0];
+        songName = parts.slice(1).join(' - ');
+      }
+      
+      if (!bands[bandName]) bands[bandName] = {};
+      if (!bands[bandName][songName]) bands[bandName][songName] = {};
+      
+      roles.forEach(rid => {
+        if (!bands[bandName][songName][rid]) bands[bandName][songName][rid] = [];
+        if (!bands[bandName][songName][rid].includes(m.name)) {
+          bands[bandName][songName][rid].push(m.name);
+        }
+      });
+    }
+  });
+  return bands;
+}
+
+function renderBandbook() {
+  const container = document.getElementById('bandbook-grid');
+  if (!container) return;
+
+  const bandbook = buildBandbook();
+  let bandNames = Object.keys(bandbook).sort((a, b) => a.localeCompare(b));
+
+  const q = state.search.toLowerCase().trim();
+  if (q) {
+    bandNames = bandNames.filter(b => b.toLowerCase().includes(q) || Object.keys(bandbook[b]).some(s => s.toLowerCase().includes(q)));
+  }
+
+  if (bandNames.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🤘</div>
+        <div class="empty-title">No bands found</div>
+        <p class="empty-desc">Add songs to your profile to see bands here!</p>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = bandNames.map(bandName => {
+    const songs = bandbook[bandName];
+    const songCount = Object.keys(songs).length;
+    const allPlayers = new Set();
+    Object.values(songs).forEach(roleMap => {
+      Object.values(roleMap).flat().forEach(p => allPlayers.add(p));
+    });
+    
+    return `
+      <div class="song-row" data-band="${encodeURIComponent(bandName)}">
+        <div style="display:flex;align-items:center;gap:1rem">
+          <div style="font-size:1.5rem">🤘</div>
+          <div>
+            <div class="song-row-title" style="font-size:1.1rem;color:var(--text-primary);font-weight:600">${bandName}</div>
+            <div class="song-row-meta">${songCount} song${songCount !== 1 ? 's' : ''} · ${allPlayers.size} musician${allPlayers.size !== 1 ? 's' : ''}</div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  container.querySelectorAll('.song-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const bandName = decodeURIComponent(row.dataset.band);
+      openBandModal(bandName, bandbook[bandName]);
+    });
+  });
+}
+
+function openBandModal(bandName, songsMap) {
+  const songsHtml = Object.keys(songsMap).sort((a, b) => a.localeCompare(b)).map(songName => {
+    const roleMap = songsMap[songName];
+    const roleIds = Object.keys(roleMap);
+    
+    const iconBadges = roleIds.map(rid => {
+      const role = ROLE_MAP[rid];
+      if (!role) return '';
+      const names = roleMap[rid].join(', ');
+      return `<span class="song-row-icon-badge" title="${names}"
+        style="color:${role.color};border-color:${role.color}55;background:${role.color}14">
+        ${role.icon} ${role.label} (${roleMap[rid].length})
+      </span>`;
+    }).join('');
+
+    return `
+      <div style="background:var(--bg-tertiary);border-radius:6px;padding:0.75rem;margin-bottom:0.75rem">
+        <div style="font-weight:600;color:var(--text-primary);margin-bottom:0.5rem;font-size:1.05rem">${songName}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:0.4rem">${iconBadges}</div>
+      </div>
+    `;
+  }).join('');
+
+  setModalContent(`
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">🤘 ${bandName}</div>
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.2rem">Band Repertoire</div>
+      </div>
+      <button class="modal-close" id="modal-close-btn">✕</button>
+    </div>
+    <div style="padding:0 0.25rem">
+      ${songsHtml}
     </div>
     <div style="margin-top:1.5rem;text-align:right">
       <button class="btn btn-secondary" id="modal-close-btn2">Close</button>
@@ -786,36 +908,48 @@ async function init() {
 
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-  // ── View toggle (Members ↔ Songbook) ────────────────────────────────────
+  // ── View toggle ─────────────────────────────────────────────────────────────
   function switchView(view) {
     state.view = view;
     const membersGrid  = document.getElementById('musicians-grid');
     const songbookGrid = document.getElementById('songbook-grid');
+    const bandbookGrid = document.getElementById('bandbook-grid');
     const filterBar    = document.getElementById('filter-bar');
+    
     const btnMembers   = document.getElementById('toggle-members');
     const btnSongbook  = document.getElementById('toggle-songbook');
+    const btnBandbook  = document.getElementById('toggle-bandbook');
     const searchInput  = document.getElementById('search-input');
+
+    // Reset visibility and active states
+    membersGrid.classList.add('hidden');
+    songbookGrid.classList.add('hidden');
+    bandbookGrid.classList.add('hidden');
+    filterBar.classList.add('hidden');
+    btnMembers.classList.remove('active');
+    btnSongbook.classList.remove('active');
+    btnBandbook.classList.remove('active');
 
     if (view === 'members') {
       membersGrid.classList.remove('hidden');
-      songbookGrid.classList.add('hidden');
       filterBar.classList.remove('hidden');
       btnMembers.classList.add('active');
-      btnSongbook.classList.remove('active');
       searchInput.placeholder = 'Search musician, band, or song…';
-    } else {
-      membersGrid.classList.add('hidden');
+    } else if (view === 'songbook') {
       songbookGrid.classList.remove('hidden');
-      filterBar.classList.add('hidden');
       btnSongbook.classList.add('active');
-      btnMembers.classList.remove('active');
       searchInput.placeholder = 'Search band or song…';
+    } else if (view === 'bandbook') {
+      bandbookGrid.classList.remove('hidden');
+      btnBandbook.classList.add('active');
+      searchInput.placeholder = 'Search band…';
     }
     renderMusicians();
   }
 
   document.getElementById('toggle-members').addEventListener('click', () => switchView('members'));
   document.getElementById('toggle-songbook').addEventListener('click', () => switchView('songbook'));
+  document.getElementById('toggle-bandbook').addEventListener('click', () => switchView('bandbook'));
 
   try {
     await loadMusicians();
