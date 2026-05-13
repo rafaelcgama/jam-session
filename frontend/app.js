@@ -474,8 +474,11 @@ function renderSongsEditor() {
 
   const songs = Object.keys(state.editSongs);
   
-  let html = `<div class="song-add-row" style="margin-bottom:1rem;display:flex;gap:0.5rem">
-    <input class="form-input" id="song-input-new" type="text" placeholder="Add a song you play..." autocomplete="off" style="flex:1" />
+    let html = `<div class="song-add-row" style="margin-bottom:1rem;display:flex;gap:0.5rem;position:relative">
+    <div style="flex:1;position:relative">
+      <input class="form-input" id="song-input-new" type="text" placeholder="Add a song you play..." autocomplete="off" style="width:100%" />
+      <div id="autocomplete-dropdown" class="autocomplete-dropdown hidden"></div>
+    </div>
     <button class="btn btn-secondary" id="btn-add-song-new" style="white-space:nowrap">+ Add</button>
   </div>`;
   
@@ -552,12 +555,74 @@ function renderSongsEditor() {
   });
 
   const addBtn = document.getElementById('btn-add-song-new');
-  if (addBtn) addBtn.addEventListener('click', addSongFromInput);
+  if (addBtn) addBtn.addEventListener('click', () => {
+    document.getElementById('autocomplete-dropdown').classList.add('hidden');
+    addSongFromInput();
+  });
 
   const input = document.getElementById('song-input-new');
-  if (input) {
+  const dropdown = document.getElementById('autocomplete-dropdown');
+  
+  if (input && dropdown) {
+    let debounceTimer;
+    
     input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); addSongFromInput(); }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        dropdown.classList.add('hidden');
+        addSongFromInput();
+      }
+    });
+
+    input.addEventListener('input', e => {
+      const query = e.target.value.trim();
+      if (query.length < 3) {
+        dropdown.classList.add('hidden');
+        return;
+      }
+
+      clearTimeout(debounceTimer);
+      dropdown.classList.remove('hidden');
+      dropdown.innerHTML = `<div class="autocomplete-loading">Searching iTunes...</div>`;
+
+      debounceTimer = setTimeout(async () => {
+        try {
+          const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=6`);
+          const data = await res.json();
+          
+          if (data.results.length === 0) {
+            dropdown.innerHTML = `<div class="autocomplete-loading">No official matches found. Press Add to use your spelling.</div>`;
+            return;
+          }
+
+          dropdown.innerHTML = data.results.map(track => `
+            <div class="autocomplete-item" data-title="${track.trackName.replace(/"/g, '&quot;')}">
+              <img src="${track.artworkUrl60}" class="autocomplete-art" alt="Album art" />
+              <div class="autocomplete-text">
+                <div class="autocomplete-title">${track.trackName}</div>
+                <div class="autocomplete-artist">${track.artistName}</div>
+              </div>
+            </div>
+          `).join('');
+
+          dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
+            item.addEventListener('click', () => {
+              input.value = item.dataset.title;
+              dropdown.classList.add('hidden');
+              input.focus();
+            });
+          });
+        } catch (err) {
+          dropdown.innerHTML = `<div class="autocomplete-loading">Error fetching suggestions</div>`;
+        }
+      }, 400); // 400ms debounce
+    });
+    
+    // Close dropdown on click outside
+    document.addEventListener('click', e => {
+      if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.classList.add('hidden');
+      }
     });
   }
 }

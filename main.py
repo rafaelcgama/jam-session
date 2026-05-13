@@ -47,12 +47,14 @@ def create_musician(data: MusicianIn):
     if database.name_exists(name):
         raise HTTPException(status_code=409, detail=f'"{name}" is already in the session')
 
+    sanitized_songs = {k.strip().title(): v for k, v in data.songs.items() if k.strip()}
+
     musician = {
         "id":       str(uuid.uuid4()),
         "name":     name,
         "colorIdx": data.colorIdx,
         "roles":    data.roles,
-        "songs":    data.songs,
+        "songs":    sanitized_songs,
         "joinedAt": str(date.today()),
     }
     return database.create(musician)
@@ -70,11 +72,13 @@ def update_musician(musician_id: str, data: MusicianIn):
     if not data.roles:
         raise HTTPException(status_code=400, detail="At least one role is required")
 
+    sanitized_songs = {k.strip().title(): v for k, v in data.songs.items() if k.strip()}
+
     return database.update(musician_id, {
         "name":     name,
         "colorIdx": data.colorIdx,
         "roles":    data.roles,
-        "songs":    data.songs,
+        "songs":    sanitized_songs,
     })
 
 
