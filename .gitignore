@@ -23,3 +23,6 @@ prod-jam.db
 # Testing
 .pytest_cache/
 .coverage
+
+# Generated docs
+*.pdf
