@@ -47,7 +47,8 @@ jam-session/
 │   ├── style.css     # Styling
 │   └── app.js        # All UI logic (rendering, modals, API calls)
 ├── scripts/
-│   ├── migrate_table_to_members.py  # Rename legacy DB table from musicians to members
+│   ├── backup_prod_db.sh           # Create timestamped VM-side production DB backups
+│   ├── restore_prod_db.sh          # Restore a production DB backup and restart the app
 │   ├── migrate_names_title_case.py  # Normalize existing names in members
 │   ├── migrate_song_titles.py       # Normalize existing song titles in members
 │   ├── pull_prod_db.sh              # Refresh local jam.db from production when needed
@@ -129,7 +130,6 @@ All endpoints are prefixed with `/api`.
 ```json
 {
   "name":     "Carlos",
-  "colorIdx": 0,
   "roles":    ["guitarist", "singer"],
   "songs": {
     "Wonderwall":   ["guitarist"],
@@ -165,13 +165,19 @@ git add .
 git commit -m "your message"
 git push origin main
 
-# 2. SSH into the server and pull the update
+# 2. Back up production data before deploying
+./scripts/backup_prod_db.sh
+
+# 3. SSH into the server and pull the update
 gcloud compute ssh jam-session-vm --zone=us-west1-b
 cd /var/www/jam-session
 sudo git pull
+
+# 4. Restart only when backend code or startup migrations changed
+sudo systemctl restart jam-session
 ```
 
-The Nginx + systemd setup means the app is automatically served and restarts on reboot. No manual service restart is needed for frontend-only changes.
+The Nginx + systemd setup means the app is automatically served and restarts on reboot. No manual service restart is needed for frontend-only changes, but backend code and database startup migrations need the service restart above.
 
 ---
 
@@ -186,7 +192,6 @@ The Nginx + systemd setup means the app is automatically served and restarts on 
 CREATE TABLE members (
     id        TEXT PRIMARY KEY,
     name      TEXT NOT NULL,
-    colorIdx  INTEGER DEFAULT 0,
     roles     TEXT NOT NULL DEFAULT '[]',   -- JSON array of role IDs
     songs     TEXT NOT NULL DEFAULT '{}',   -- JSON dict: song -> [role IDs]
     joinedAt  TEXT NOT NULL
@@ -218,6 +223,48 @@ The script:
 
 This is an intentional one-way refresh from production to local. It keeps costs at zero while keeping development data separate by default.
 
+### Production Backups and Restore
+
+The production database is not stored in Git. It lives on the VM at `/var/www/jam-session/jam.db`, so code changes should not erase member data.
+
+Before risky work or any deploy, create a VM-side backup:
+
+```bash
+./scripts/backup_prod_db.sh
+```
+
+Backups are stored on the VM under `/var/www/jam-session/.db_backups/` as timestamped files like:
+
+```text
+jam.db.backup.YYYYMMDDHHMMSS
+```
+
+By default, the backup script keeps the newest 30 backups. Override that with:
+
+```bash
+JAM_SESSION_KEEP_BACKUPS=60 ./scripts/backup_prod_db.sh
+```
+
+List available production backups:
+
+```bash
+./scripts/restore_prod_db.sh --list
+```
+
+Restore the newest backup and restart the service:
+
+```bash
+./scripts/restore_prod_db.sh
+```
+
+Restore a specific backup:
+
+```bash
+./scripts/restore_prod_db.sh jam.db.backup.YYYYMMDDHHMMSS
+```
+
+The restore script first creates a `jam.db.pre-restore.TIMESTAMP` safety copy of the current DB before replacing it.
+
 Existing names in members can be normalized to the app's simple ASCII title-case convention with:
 
 ```bash
@@ -228,12 +275,6 @@ Existing song titles can be normalized to remove remaster-only variants with:
 
 ```bash
 ./scripts/migrate_song_titles.py ./jam.db
-```
-
-Older databases with a `musicians` table are migrated to `members` automatically on app startup. You can also run the table migration manually:
-
-```bash
-./scripts/migrate_table_to_members.py ./jam.db
 ```
 
 Run the same script on production only after deploying matching application code:
@@ -281,6 +322,7 @@ This updates `prod-jam.db` from the VM. In DataGrip, refresh the data source/tab
 
 | Version | Description                                             |
 |---------|---------------------------------------------------------|
+| `v1.4.0` | Launch hardening: clean member schema, production backup/restore scripts, resilient member parsing, frontend robustness fixes, custom-instrument normalization consistency, and broader tests |
 | `v1.3.0` | Custom instruments, cleaner song grouping, profile links from repertoire views, shared validation rules, and broader frontend/backend tests |
 | `v1.2.0` | Songbook and Bandbook polish, profile links from song and band breakdowns, stricter API validation, and frontend tests |
 | `v1.1.0` | Songbook/Bandbook views, search improvements, and Apple Music autocomplete |

@@ -37,11 +37,6 @@ const ROLES = [
 
 const ROLE_MAP = Object.fromEntries(ROLES.map(r => [r.id, r]));
 
-const AVATAR_COLORS = [
-  ['#1a1a2e','#5b8cff'], ['#1a1a2e','#f5a623'], ['#1a1a2e','#9b72f5'],
-  ['#1a1a2e','#3ecf8e'], ['#1a1a2e','#f56bab'], ['#1a1a2e','#56cfe1'],
-];
-
 const API = '/api/members';
 
 // ===== STATE =====
@@ -110,11 +105,15 @@ function decodeDataValue(value) {
 }
 
 function normaliseSearch(value) {
-  return String(value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+  return stripAccents(value)
     .toLowerCase()
     .trim();
+}
+
+function stripAccents(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 }
 
 const REMASTER_EDITION_RE = /\s*(?:[\(\[]\s*(?:(?:\d{2,4}\s+)?(?:digital\s+)?remaster(?:ed)?(?:\s+\d{2,4})?(?:\s+version)?|remaster(?:ed)?\s+version)\s*[\)\]]|[-–—]\s*(?:(?:\d{2,4}\s+)?(?:digital\s+)?remaster(?:ed)?(?:\s+\d{2,4})?(?:\s+version)?|remaster(?:ed)?\s+version))\s*$/i;
@@ -159,7 +158,7 @@ function normalizeSongKey(value) {
 const CUSTOM_ROLE_PREFIX = 'other:';
 
 function normalizeInstrumentName(value) {
-  return String(value ?? '')
+  return stripAccents(value)
     .trim()
     .split(/\s+/)
     .map(titlePreservingContractions)
@@ -216,12 +215,13 @@ function getCustomRoleOptions(sourceMembers = members) {
 }
 
 function memberMatchesRoleFilter(member, filter, customFilter = 'all') {
+  const roles = member.roles || [];
   if (filter === 'all') return true;
   if (filter === 'other') {
-    if (customFilter !== 'all') return member.roles.includes(customFilter);
-    return member.roles.some(isCustomRole) || member.roles.includes('other');
+    if (customFilter !== 'all') return roles.includes(customFilter);
+    return roles.some(isCustomRole) || roles.includes('other');
   }
-  return member.roles.includes(filter);
+  return roles.includes(filter);
 }
 
 function memberMatchesRoleFilters(member, filters = [], customFilter = 'all') {
@@ -344,17 +344,20 @@ function buildSongbookFrom(sourceMembers, search = '') {
   const q = normaliseSearch(search);
   const book = {};
   for (const m of sourceMembers) {
-    for (const [title, rids] of Object.entries(m.songs)) {
+    const memberName = String(m.name ?? 'Unknown');
+    for (const [title, rids] of Object.entries(m.songs || {})) {
+      const roleIds = Array.isArray(rids) ? rids : [];
+      if (roleIds.length === 0) continue;
       const matchesTitle = normaliseSearch(title).includes(q);
-      const matchesMember = normaliseSearch(m.name).includes(q);
+      const matchesMember = normaliseSearch(memberName).includes(q);
       
       if (q && !matchesTitle && !matchesMember) continue;
       
       if (!book[title]) book[title] = {};
-      for (const rid of rids) {
+      for (const rid of roleIds) {
         if (!book[title][rid]) book[title][rid] = [];
-        if (!book[title][rid].includes(m.name)) {
-          book[title][rid].push(m.name);
+        if (!book[title][rid].includes(memberName)) {
+          book[title][rid].push(memberName);
         }
       }
     }
@@ -482,7 +485,10 @@ function openInstantBandModal(title, roleMap, options = {}) {
 function buildBandbookFrom(sourceMembers) {
   const bands = {};
   sourceMembers.forEach(m => {
-    for (const [title, roles] of Object.entries(m.songs)) {
+    const memberName = String(m.name ?? 'Unknown');
+    for (const [title, roles] of Object.entries(m.songs || {})) {
+      const roleIds = Array.isArray(roles) ? roles : [];
+      if (roleIds.length === 0) continue;
       let bandName = "Originals / Unknown";
       let songName = title;
       if (title.includes(' - ')) {
@@ -494,10 +500,10 @@ function buildBandbookFrom(sourceMembers) {
       if (!bands[bandName]) bands[bandName] = {};
       if (!bands[bandName][songName]) bands[bandName][songName] = {};
       
-      roles.forEach(rid => {
+      roleIds.forEach(rid => {
         if (!bands[bandName][songName][rid]) bands[bandName][songName][rid] = [];
-        if (!bands[bandName][songName][rid].includes(m.name)) {
-          bands[bandName][songName][rid].push(m.name);
+        if (!bands[bandName][songName][rid].includes(memberName)) {
+          bands[bandName][songName][rid].push(memberName);
         }
       });
     }
@@ -1251,19 +1257,20 @@ async function saveEdit() {
   }
 
   const saveBtn = document.getElementById('modal-save-btn');
+  const defaultSaveText = saveBtn.textContent;
+  const resetSaveButton = () => {
+    saveBtn.disabled = false;
+    saveBtn.textContent = defaultSaveText;
+  };
   saveBtn.disabled = true;
-  saveBtn.textContent = 'Saving…';
-
-  const existing = members.find(m => m.id === state.editingId);
-  const colorIdx = existing ? existing.colorIdx : members.length % AVATAR_COLORS.length;
+  saveBtn.textContent = 'Saving...';
 
   const finalSongs = {};
   const allSongRids = new Set();
   
   for (const [title, rids] of Object.entries(state.editSongs)) {
     if (rids.length === 0) {
-      saveBtn.disabled = false;
-      saveBtn.textContent = 'Save';
+      resetSaveButton();
       toast(`Please add an instrument to the song "${title}", or remove it.`, 'error');
       return;
     }
@@ -1274,15 +1281,13 @@ async function saveEdit() {
   const finalRoles = Array.from(allSongRids);
   
   if (finalRoles.length === 0) {
-    saveBtn.disabled = false;
-    saveBtn.textContent = 'Save';
+    resetSaveButton();
     toast('Select at least one instrument', 'error'); 
     return;
   }
 
   const payload = {
     name,
-    colorIdx,
     roles: finalRoles,
     songs: finalSongs,
   };
@@ -1308,8 +1313,7 @@ async function saveEdit() {
     renderMembers();
   } catch (err) {
     toast(err.message, 'error');
-    saveBtn.disabled = false;
-    saveBtn.textContent = 'Save Profile';
+    resetSaveButton();
   }
 }
 
@@ -1515,6 +1519,7 @@ if (typeof module !== 'undefined' && module.exports) {
     normaliseSearch,
     normalizeSongKey,
     shouldOpenCardFromKey,
+    stripAccents,
     ROLES,
   };
 }

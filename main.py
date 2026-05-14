@@ -21,7 +21,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="JAM Session API",
     description="Who plays what at the jam session.",
-    version="1.0.0",
+    version="1.4.0",
     lifespan=lifespan,
 )
 
@@ -29,7 +29,6 @@ app = FastAPI(
 # ── Schemas ───────────────────────────────────────────────────────────────────
 class MemberIn(BaseModel):
     name: str
-    colorIdx: int = Field(default=0, ge=0, le=5)
     roles: list[str]
     songs: dict[str, list[str]] = Field(default_factory=dict)
 
@@ -68,7 +67,6 @@ def create_member(data: MemberIn):
     member = {
         "id":       str(uuid.uuid4()),
         "name":     name,
-        "colorIdx": data.colorIdx,
         "roles":    roles,
         "songs":    sanitized_songs,
         "joinedAt": str(date.today()),
@@ -99,7 +97,6 @@ def update_member(member_id: str, data: MemberIn):
 
     return database.update(member_id, {
         "name":     name,
-        "colorIdx": data.colorIdx,
         "roles":    roles,
         "songs":    sanitized_songs,
     })

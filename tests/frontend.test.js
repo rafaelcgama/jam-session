@@ -123,11 +123,16 @@ test('builds and displays custom Other instruments with the clef icon', () => {
   });
 });
 
+test('normalizes custom instruments without accents to match the backend', () => {
+  assert.equal(app.makeCustomRoleId('  cavaco elétrico  '), 'other:Cavaco Eletrico');
+});
+
 test('matches custom instruments when filtering by Other', () => {
   assert.equal(app.memberMatchesRoleFilter({ roles: ['other:Berimbau'] }, 'other'), true);
   assert.equal(app.memberMatchesRoleFilter({ roles: ['guitarist'] }, 'other'), false);
   assert.equal(app.memberMatchesRoleFilter({ roles: ['other:Cavaco'] }, 'other', 'other:Cavaco'), true);
   assert.equal(app.memberMatchesRoleFilter({ roles: ['other:Berimbau'] }, 'other', 'other:Cavaco'), false);
+  assert.equal(app.memberMatchesRoleFilter({}, 'other'), false);
 });
 
 test('matches any selected instrument filter', () => {
@@ -208,6 +213,25 @@ test('builds songbook rows with custom Other instruments', () => {
 
   assert.deepEqual(app.buildSongbookFrom(members), {
     'Original Jam': { 'other:Berimbau': ['Ana'] },
+  });
+});
+
+test('skips malformed song records instead of crashing songbook and bandbook builders', () => {
+  const members = [
+    { name: 'No Songs Yet' },
+    { name: 'Bad Roles', songs: { 'Original Jam': 'singer' } },
+    { name: 'Good Record', songs: { 'Radiohead - Creep': ['singer'] } },
+  ];
+
+  assert.deepEqual(app.buildSongbookFrom(members), {
+    'Radiohead - Creep': { singer: ['Good Record'] },
+  });
+  assert.deepEqual(app.buildBandbookFrom(members), {
+    Radiohead: {
+      Creep: {
+        singer: ['Good Record'],
+      },
+    },
   });
 });
 

@@ -5,7 +5,6 @@ Run with:
     pytest tests/ -v
 """
 import json
-import sqlite3
 import pytest
 from fastapi.testclient import TestClient
 
@@ -31,11 +30,17 @@ def client():
     return TestClient(app)
 
 
+class TestAppMetadata:
+    def test_openapi_reports_current_version(self, client):
+        res = client.get("/openapi.json")
+        assert res.status_code == 200
+        assert res.json()["info"]["version"] == "1.4.0"
+
+
 # ── Helper ────────────────────────────────────────────────────────────────────
 def create_member(client, name="Carlos", roles=None, songs=None):
     payload = {
         "name": name,
-        "colorIdx": 0,
         "roles": roles or ["guitarist"],
         "songs": songs or {"Wonderwall": ["guitarist"]},
     }
@@ -72,6 +77,7 @@ class TestCreateMember:
         assert "singer" in body["roles"]
         assert "id" in body
         assert "joinedAt" in body
+        assert set(body) == {"id", "name", "roles", "songs", "joinedAt"}
 
     def test_creates_member_with_songs(self, client):
         songs = {"Wonderwall": ["guitarist"], "Sweet Child": ["guitarist", "singer"]}
@@ -114,15 +120,6 @@ class TestCreateMember:
         res = client.post("/api/members", json={"name": "  zazá  ", "roles": ["singer"], "songs": {}})
         assert res.status_code == 201
         assert res.json()["name"] == "Zaza"
-
-    def test_rejects_color_index_outside_avatar_palette(self, client):
-        res = client.post("/api/members", json={
-            "name": "Carlos",
-            "colorIdx": 99,
-            "roles": ["guitarist"],
-            "songs": {},
-        })
-        assert res.status_code == 422
 
     def test_rejects_unknown_profile_role(self, client):
         res = client.post("/api/members", json={"name": "Carlos", "roles": ["triangle"], "songs": {}})
@@ -219,7 +216,7 @@ class TestUpdateMember:
     def test_updates_member_name(self, client):
         member_id = create_member(client, name="Carlos").json()["id"]
         res = client.put(f"/api/members/{member_id}", json={
-            "name": "karl lager", "colorIdx": 0, "roles": ["guitarist"], "songs": {}
+            "name": "karl lager", "roles": ["guitarist"], "songs": {}
         })
         assert res.status_code == 200
         assert res.json()["name"] == "Karl Lager"
@@ -228,7 +225,7 @@ class TestUpdateMember:
         member_id = create_member(client).json()["id"]
         updated_songs = {"Bohemian Rhapsody": ["guitarist", "singer"]}
         res = client.put(f"/api/members/{member_id}", json={
-            "name": "Carlos", "colorIdx": 0,
+            "name": "Carlos",
             "roles": ["guitarist", "singer"],
             "songs": updated_songs,
         })
@@ -239,21 +236,21 @@ class TestUpdateMember:
 
     def test_returns_404_for_unknown_id(self, client):
         res = client.put("/api/members/nonexistent-id", json={
-            "name": "Carlos", "colorIdx": 0, "roles": ["guitarist"], "songs": {}
+            "name": "Carlos", "roles": ["guitarist"], "songs": {}
         })
         assert res.status_code == 404
 
     def test_rejects_empty_name_on_update(self, client):
         member_id = create_member(client).json()["id"]
         res = client.put(f"/api/members/{member_id}", json={
-            "name": "", "colorIdx": 0, "roles": ["guitarist"], "songs": {}
+            "name": "", "roles": ["guitarist"], "songs": {}
         })
         assert res.status_code == 400
 
     def test_rejects_empty_roles_on_update(self, client):
         member_id = create_member(client).json()["id"]
         res = client.put(f"/api/members/{member_id}", json={
-            "name": "Carlos", "colorIdx": 0, "roles": [], "songs": {}
+            "name": "Carlos", "roles": [], "songs": {}
         })
         assert res.status_code == 400
 
@@ -262,7 +259,7 @@ class TestUpdateMember:
         sofia_id = create_member(client, name="Sofia").json()["id"]
 
         res = client.put(f"/api/members/{sofia_id}", json={
-            "name": "carlos", "colorIdx": 0, "roles": ["singer"], "songs": {}
+            "name": "carlos", "roles": ["singer"], "songs": {}
         })
 
         assert res.status_code == 409
@@ -300,7 +297,6 @@ class TestDatabase:
         member = {
             "id": str(uuid.uuid4()),
             "name": "Carlos",
-            "colorIdx": 0,
             "roles": ["guitarist"],
             "songs": {},
             "joinedAt": str(date.today()),
@@ -315,7 +311,6 @@ class TestDatabase:
         member = {
             "id": mid,
             "name": "Carlos",
-            "colorIdx": 0,
             "roles": ["guitarist"],
             "songs": {},
             "joinedAt": str(date.today()),
@@ -334,7 +329,6 @@ class TestDatabase:
         member = {
             "id": mid,
             "name": "Ana",
-            "colorIdx": 2,
             "roles": ["singer", "guitarist"],
             "songs": {"Hey Jude": ["singer"]},
             "joinedAt": str(date.today()),
@@ -346,35 +340,17 @@ class TestDatabase:
         assert result["roles"] == ["singer", "guitarist"]
         assert result["songs"] == {"Hey Jude": ["singer"]}
 
-    def test_init_db_migrates_legacy_musicians_table(self, tmp_path, monkeypatch):
-        legacy_db = tmp_path / "legacy_jam.db"
-        with sqlite3.connect(legacy_db) as conn:
-            conn.execute("""
-                CREATE TABLE musicians (
-                    id        TEXT PRIMARY KEY,
-                    name      TEXT NOT NULL,
-                    colorIdx  INTEGER DEFAULT 0,
-                    roles     TEXT NOT NULL DEFAULT '[]',
-                    songs     TEXT NOT NULL DEFAULT '{}',
-                    joinedAt  TEXT NOT NULL
-                )
-            """)
+    def test_parse_member_falls_back_when_json_columns_are_malformed(self):
+        with database.get_connection() as conn:
             conn.execute(
-                "INSERT INTO musicians (id, name, colorIdx, roles, songs, joinedAt) VALUES (?, ?, ?, ?, ?, ?)",
-                ("member-1", "Ana", 0, "[]", "{}", "2026-05-13"),
+                "INSERT INTO members (id, name, roles, songs, joinedAt) VALUES (?, ?, ?, ?, ?)",
+                ("bad-json", "Ana", "not-json", '"not-a-dict"', "2026-05-14"),
             )
 
-        monkeypatch.setattr(database, "DB_PATH", legacy_db)
-        database.init_db()
+        result = database.get_by_id("bad-json")
 
-        with sqlite3.connect(legacy_db) as conn:
-            tables = {
-                row[0]
-                for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            }
-            assert "members" in tables
-            assert "musicians" not in tables
-            assert conn.execute("SELECT COUNT(*) FROM members").fetchone()[0] == 1
+        assert result["roles"] == []
+        assert result["songs"] == {}
 
 
 class TestDomainNormalization:

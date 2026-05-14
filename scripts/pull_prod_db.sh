@@ -46,11 +46,11 @@ cp "$LOCAL_TMP" "$LOCAL_DB"
 echo "Local DB refreshed from production: $LOCAL_DB"
 
 if command -v sqlite3 >/dev/null 2>&1; then
-  TABLE_NAME="$(sqlite3 "$LOCAL_DB" "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('members', 'musicians') ORDER BY CASE name WHEN 'members' THEN 0 ELSE 1 END LIMIT 1;")"
-  if [[ -z "$TABLE_NAME" ]]; then
+  HAS_MEMBERS="$(sqlite3 "$LOCAL_DB" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='members';")"
+  if [[ "$HAS_MEMBERS" == "0" ]]; then
     MEMBER_COUNT=0
   else
-    MEMBER_COUNT="$(sqlite3 "$LOCAL_DB" "SELECT COUNT(*) FROM $TABLE_NAME;")"
+    MEMBER_COUNT="$(sqlite3 "$LOCAL_DB" "SELECT COUNT(*) FROM members;")"
   fi
   echo "Local members count: $MEMBER_COUNT"
 fi

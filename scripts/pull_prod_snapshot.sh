@@ -36,11 +36,11 @@ cp "$LOCAL_TMP" "$SNAPSHOT_DB"
 echo "Production snapshot refreshed for DataGrip: $SNAPSHOT_DB"
 
 if command -v sqlite3 >/dev/null 2>&1; then
-  TABLE_NAME="$(sqlite3 "$SNAPSHOT_DB" "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('members', 'musicians') ORDER BY CASE name WHEN 'members' THEN 0 ELSE 1 END LIMIT 1;")"
-  if [[ -z "$TABLE_NAME" ]]; then
+  HAS_MEMBERS="$(sqlite3 "$SNAPSHOT_DB" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='members';")"
+  if [[ "$HAS_MEMBERS" == "0" ]]; then
     MEMBER_COUNT=0
   else
-    MEMBER_COUNT="$(sqlite3 "$SNAPSHOT_DB" "SELECT COUNT(*) FROM $TABLE_NAME;")"
+    MEMBER_COUNT="$(sqlite3 "$SNAPSHOT_DB" "SELECT COUNT(*) FROM members;")"
   fi
   echo "Snapshot members count: $MEMBER_COUNT"
 fi
