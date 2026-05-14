@@ -947,7 +947,7 @@ function renderSongsEditor() {
 
   let html = `<div class="song-add-row">
     <div class="song-add-input-wrap">
-      <input class="form-input" id="song-input-new" type="text" placeholder="Search Apple Music and select a song..." autocomplete="off" style="width:100%" />
+      <input class="form-input" id="song-input-new" type="text" placeholder="Search and select a song..." autocomplete="off" style="width:100%" />
       <div id="autocomplete-dropdown" class="autocomplete-dropdown hidden"></div>
     </div>
     <button class="btn btn-secondary" id="btn-add-song-new" style="white-space:nowrap">+ Add Song</button>
