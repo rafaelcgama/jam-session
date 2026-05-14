@@ -48,7 +48,7 @@ const API = '/api/members';
 let members = [];   // in-memory cache from server
 let state = {
   view:      'members',  // 'members' | 'songbook'
-  filter:    'all',
+  filters:   [],
   customFilter: 'all',
   search:    '',
   modalMode: null,
@@ -224,6 +224,11 @@ function memberMatchesRoleFilter(member, filter, customFilter = 'all') {
   return member.roles.includes(filter);
 }
 
+function memberMatchesRoleFilters(member, filters = [], customFilter = 'all') {
+  if (!filters.length) return true;
+  return filters.some(filter => memberMatchesRoleFilter(member, filter, customFilter));
+}
+
 function buildSelectedSongRoles(pendingRoles, pendingOtherInstrument) {
   const selected = [];
   for (const rid of pendingRoles) {
@@ -246,8 +251,8 @@ function getFilteredMembers() {
       return Object.keys(m.songs).some(s => normaliseSearch(s).includes(q));
     });
   }
-  if (state.filter !== 'all') {
-    list = list.filter(m => memberMatchesRoleFilter(m, state.filter, state.customFilter));
+  if (state.filters.length > 0) {
+    list = list.filter(m => memberMatchesRoleFilters(m, state.filters, state.customFilter));
   }
   return list;
 }
@@ -694,11 +699,12 @@ function renderFilterChips() {
   if (!customOptions.includes(state.customFilter)) {
     state.customFilter = 'all';
   }
+  const activeFilters = new Set(state.filters);
 
-  const all = `<button class="chip filter-chip ${state.filter === 'all' ? 'active' : ''}" type="button" data-filter="all">🎶 All</button>`;
+  const all = `<button class="chip filter-chip ${activeFilters.size === 0 ? 'active' : ''}" type="button" data-filter="all">🎶 All</button>`;
   const chips = ROLES.map(r => {
     if (r.id === 'other') {
-      const isActive = state.filter === 'other';
+      const isActive = activeFilters.has('other');
       let label = r.label;
       if (isActive && state.customFilter !== 'all') {
         label = getRole(state.customFilter)?.label || r.label;
@@ -729,7 +735,7 @@ function renderFilterChips() {
     }
 
     return `
-      <button class="chip filter-chip ${state.filter === r.id ? 'active' : ''}" type="button" data-filter="${r.id}">
+      <button class="chip filter-chip ${activeFilters.has(r.id) ? 'active' : ''}" type="button" data-filter="${r.id}">
         <span class="chip-icon">${r.icon}</span>${escapeHtml(r.label)}
       </button>`;
   }).join('');
@@ -739,12 +745,23 @@ function renderFilterChips() {
     c.addEventListener('click', e => {
       e.stopPropagation();
       const newFilter = c.dataset.filter;
-      if (newFilter === 'other') {
-        state.filter = 'other';
-        state.otherDropdownOpen = !state.otherDropdownOpen;
-      } else {
-        state.filter = newFilter;
+      if (newFilter === 'all') {
+        state.filters = [];
         state.customFilter = 'all';
+        state.otherDropdownOpen = false;
+      } else if (newFilter === 'other') {
+        if (state.filters.includes('other')) {
+          state.filters = state.filters.filter(filter => filter !== 'other');
+          state.customFilter = 'all';
+          state.otherDropdownOpen = false;
+        } else {
+          state.filters = [...state.filters, 'other'];
+          state.otherDropdownOpen = customOptions.length > 0;
+        }
+      } else {
+        state.filters = state.filters.includes(newFilter)
+          ? state.filters.filter(filter => filter !== newFilter)
+          : [...state.filters, newFilter];
         state.otherDropdownOpen = false;
       }
       renderFilterChips();
@@ -757,6 +774,7 @@ function renderFilterChips() {
       state.customFilter = c.dataset.customFilter === 'all'
         ? 'all'
         : decodeDataValue(c.dataset.customFilter);
+      if (!state.filters.includes('other')) state.filters = [...state.filters, 'other'];
       state.otherDropdownOpen = false;
       renderFilterChips();
       renderMembers();
@@ -1450,7 +1468,7 @@ async function init() {
     e.preventDefault();
     closeModal();
     state.search = '';
-    state.filter = 'all';
+    state.filters = [];
     state.customFilter = 'all';
     state.otherDropdownOpen = false;
     document.getElementById('search-input').value = '';
@@ -1493,6 +1511,7 @@ if (typeof module !== 'undefined' && module.exports) {
     getRole,
     makeCustomRoleId,
     memberMatchesRoleFilter,
+    memberMatchesRoleFilters,
     normaliseSearch,
     normalizeSongKey,
     shouldOpenCardFromKey,

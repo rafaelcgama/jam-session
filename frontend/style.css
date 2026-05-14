@@ -238,6 +238,9 @@ main {
   gap: 0.5rem;
   flex-wrap: wrap;
   margin-bottom: 2rem;
+  isolation: isolate;
+  position: relative;
+  z-index: 20;
 }
 .chip {
   display: inline-flex;
@@ -271,6 +274,10 @@ main {
 .other-filter-wrap {
   position: relative;
   display: inline-block;
+  z-index: 1;
+}
+.other-filter-wrap:has(.other-dropdown-menu) {
+  z-index: 30;
 }
 .other-dropdown-menu {
   display: flex;
@@ -281,10 +288,10 @@ main {
   position: absolute;
   top: calc(100% + 0.5rem);
   left: 0;
-  z-index: 100;
+  z-index: 10000;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: var(--bg-secondary);
+  background: #161b29;
   box-shadow: 0 10px 25px rgba(0,0,0,0.8);
   text-align: left;
 }

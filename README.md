@@ -4,6 +4,8 @@ A lightweight web app for jam session members to register their name, instrument
 
 **Live App:** [https://dnomads-jam-fln.duckdns.org](https://dnomads-jam-fln.duckdns.org)
 
+**Member Instructions:** [MEMBER_GUIDE.md](MEMBER_GUIDE.md)
+
 ---
 
 ## ✨ Features

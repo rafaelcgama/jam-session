@@ -130,6 +130,13 @@ test('matches custom instruments when filtering by Other', () => {
   assert.equal(app.memberMatchesRoleFilter({ roles: ['other:Berimbau'] }, 'other', 'other:Cavaco'), false);
 });
 
+test('matches any selected instrument filter', () => {
+  assert.equal(app.memberMatchesRoleFilters({ roles: ['accordion'] }, ['accordion', 'banjo']), true);
+  assert.equal(app.memberMatchesRoleFilters({ roles: ['guitarist'] }, ['accordion', 'banjo']), false);
+  assert.equal(app.memberMatchesRoleFilters({ roles: ['other:Cavaco'] }, ['accordion', 'other'], 'other:Cavaco'), true);
+  assert.equal(app.memberMatchesRoleFilters({ roles: ['other:Cavaco'] }, []), true);
+});
+
 test('collects custom instrument filter options from roles and songs', () => {
   const members = [
     {
