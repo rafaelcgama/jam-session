@@ -1,4 +1,5 @@
 import re
+import unicodedata
 import uuid
 from datetime import date
 from pathlib import Path
@@ -112,7 +113,8 @@ def sanitize_song_key(key: str) -> str:
 
 def title_case_name(name: str) -> str:
     """Normalize names in members for consistent display and duplicate checks."""
-    return " ".join(part.title() for part in name.strip().split())
+    ascii_name = "".join(c for c in unicodedata.normalize("NFKD", name) if not unicodedata.combining(c))
+    return " ".join(part.title() for part in ascii_name.strip().split())
 
 
 def normalize_role_id(role_id: str) -> str:

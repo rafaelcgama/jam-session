@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 import sys
 import sqlite3
+import unicodedata
 from pathlib import Path
 
 TABLE_NAME = "members"
 
 
 def title_case_name(name: str) -> str:
-    return " ".join(part.title() for part in name.strip().split())
+    ascii_name = "".join(c for c in unicodedata.normalize("NFKD", name) if not unicodedata.combining(c))
+    return " ".join(part.title() for part in ascii_name.strip().split())
 
 
 def migrate_db(db_path: Path):

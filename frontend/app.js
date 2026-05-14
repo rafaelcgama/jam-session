@@ -89,7 +89,11 @@ function decodeDataValue(value) {
 }
 
 function normaliseSearch(value) {
-  return String(value ?? '').toLowerCase().trim();
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
 }
 
 const REMASTER_EDITION_RE = /\s*(?:[\(\[]\s*(?:(?:\d{2,4}\s+)?(?:digital\s+)?remaster(?:ed)?(?:\s+\d{2,4})?(?:\s+version)?|remaster(?:ed)?\s+version)\s*[\)\]]|[-–—]\s*(?:(?:\d{2,4}\s+)?(?:digital\s+)?remaster(?:ed)?(?:\s+\d{2,4})?(?:\s+version)?|remaster(?:ed)?\s+version))\s*$/i;
