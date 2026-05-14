@@ -102,6 +102,16 @@ test('uses instrument-specific icons for harmonica and ukulele', () => {
   assert.notEqual(ukulele.icon, '🌴');
 });
 
+test('opens member cards from keyboard only when the card itself is focused', () => {
+  const card = {};
+  const nestedButton = {};
+
+  assert.equal(app.shouldOpenCardFromKey({ key: 'Enter', target: card, currentTarget: card }), true);
+  assert.equal(app.shouldOpenCardFromKey({ key: ' ', target: card, currentTarget: card }), true);
+  assert.equal(app.shouldOpenCardFromKey({ key: 'Escape', target: card, currentTarget: card }), false);
+  assert.equal(app.shouldOpenCardFromKey({ key: 'Enter', target: nestedButton, currentTarget: card }), false);
+});
+
 test('builds and displays custom Other instruments with the clef icon', () => {
   const roleId = app.makeCustomRoleId('  berimbau  ');
   assert.equal(roleId, 'other:Berimbau');

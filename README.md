@@ -8,20 +8,13 @@ A lightweight web app for jam session members to register their name, instrument
 
 ## ✨ Features
 
-- Add members with their name, instruments, and song repertoire
-- View, edit, or remove profiles from the crew grid
-- Filter the crew by instrument and search by members or songs
-- Filter `Other` instruments down to the specific custom instrument saved by members
-- Songbook tab that groups all registered songs and shows who can play each instrument
-- Bandbook tab that groups songs by artist/band from `Artist - Song` titles
-- Instant Band breakdowns for a song, with clickable badges for members that open profiles without leaving Songbook or Bandbook
-- Apple Music song autocomplete when adding repertoire; songs are selected from listed results for consistent grouping
-- Song-first data model: add a song once, assign multiple instruments to it
-- `Other` instrument option with a custom instrument name field and the shared clef icon
-- Shared backend domain rules for member names, custom instruments, and song normalization
-- Server-side validation for duplicate names, unknown instruments, blank song titles, and songs without instruments
-- Safer frontend rendering for user-provided names, band names, and song titles
-- Fully responsive and mobile-friendly
+- Add members with their instruments and song repertoire
+- Search and filter the crew by member, song, or instrument
+- Use Apple Music autocomplete to add songs consistently
+- Add custom instruments through the `Other` option
+- Browse the Songbook to see who can play each song and instrument
+- Browse the Bandbook to group songs by artist or band
+- Open member profiles from the crew, Songbook, or Bandbook
 
 ---
 
@@ -114,7 +107,7 @@ node --check frontend/app.js
 pytest tests/ -v --tb=short
 ```
 
-Current coverage focuses on API validation, database helpers, domain normalization, Songbook/Bandbook grouping, custom instruments, frontend escaping, and API error handling.
+Current coverage focuses on API validation, database helpers, domain normalization, Songbook/Bandbook grouping, custom instruments, frontend rendering helpers, and API error handling.
 
 ---
 
@@ -286,9 +279,9 @@ This updates `prod-jam.db` from the VM. In DataGrip, refresh the data source/tab
 
 | Version | Description                                             |
 |---------|---------------------------------------------------------|
-| `v1.3.0` | Shared domain normalization, custom `Other` instrument filtering, stronger API errors, safer SQLite settings, and broader frontend/backend tests |
-| `v1.2.0` | Songbook and Bandbook polish, profile links from song/band breakdowns, safer frontend rendering, stricter API validation, frontend unit tests |
-| `v1.1.0` | Songbook/Bandbook views, members search improvements, iTunes autocomplete, dynamic section titles |
+| `v1.3.0` | Custom instruments, cleaner song grouping, profile links from repertoire views, shared validation rules, and broader frontend/backend tests |
+| `v1.2.0` | Songbook and Bandbook polish, profile links from song and band breakdowns, stricter API validation, and frontend tests |
+| `v1.1.0` | Songbook/Bandbook views, search improvements, and Apple Music autocomplete |
 | `v1.0.0` | Initial production release — song-first data model, live on GCP |
 
 ---

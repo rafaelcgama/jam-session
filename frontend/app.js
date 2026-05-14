@@ -297,7 +297,7 @@ function renderMembers() {
 
     card.addEventListener('click', openCardProfile);
     card.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') {
+      if (shouldOpenCardFromKey(e)) {
         e.preventDefault();
         openCardProfile();
       }
@@ -323,6 +323,10 @@ function renderMembers() {
       }
     });
   });
+}
+
+function shouldOpenCardFromKey(event) {
+  return event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ');
 }
 
 // ===== SONGBOOK =====
@@ -1491,6 +1495,7 @@ if (typeof module !== 'undefined' && module.exports) {
     memberMatchesRoleFilter,
     normaliseSearch,
     normalizeSongKey,
+    shouldOpenCardFromKey,
     ROLES,
   };
 }
