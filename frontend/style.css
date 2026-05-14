@@ -744,17 +744,76 @@ main {
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
 
 /* ===== RESPONSIVE ===== */
-@media (max-width: 640px) {
-  .header-inner { gap: 0.5rem; }
-  .logo-img { height: 34px; }
-  .logo-title { font-size: 1.05rem; }
-  .logo-subtitle { font-size: 0.6rem; }
-  .search-wrapper { max-width: 160px; }
-  main { padding: 1.5rem 1rem 3rem; }
-  .members-grid { grid-template-columns: 1fr; }
-  .modal { padding: 1.25rem; }
-  .roles-grid { grid-template-columns: repeat(2, 1fr); }
-  .section-title { font-size: 1.25rem; }
+@media (max-width: 768px) {
+  /* Header layout: stack logo/action row above search bar for full-width search */
+  .header-inner {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+  }
+  .logo { flex: 1; }
+  .logo-img { height: 32px; }
+  .logo-title { font-size: 1.15rem; }
+  .logo-subtitle { font-size: 0.65rem; }
+  .search-wrapper {
+    order: 3;
+    flex-basis: 100%;
+    max-width: 100%;
+  }
+
+  /* Section header: stack title above view toggle tabs */
+  .section-header {
+    flex-direction: column;
+    align_items: stretch;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+  .section-title {
+    font-size: 1.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  /* View toggle tabs: full width, equal distribution */
+  .view-toggle {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    text-align: center;
+    padding: 0.3rem;
+  }
+  .toggle-btn {
+    padding: 0.5rem 0.2rem;
+    font-size: 0.78rem;
+    width: 100%;
+  }
+
+  /* Main content padding */
+  main { padding: 1.25rem 1rem 3rem; }
+
+  /* Grids and Cards */
+  .members-grid { grid-template-columns: 1fr; gap: 1rem; }
+  .songbook-grid { gap: 0.75rem; }
+  .song-row {
+    padding: 0.85rem 1rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+  .song-row-icons {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  /* Modals: optimize for small screens */
+  .modal {
+    width: 95%;
+    max-width: none;
+    margin: 1rem auto;
+    padding: 1.5rem 1.25rem;
+  }
+  .roles-grid { grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
 }
 
 /* ===== UTILITY ===== */
