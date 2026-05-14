@@ -17,6 +17,7 @@ A lightweight web app for jam session members to register their name, instrument
 - Browse the Songbook to see who can play each song and instrument
 - Browse the Bandbook to group songs by artist or band
 - Open member profiles from the crew, Songbook, or Bandbook
+- Log in with email before entering the app; only the profile owner or admin can edit/remove a profile
 
 ---
 
@@ -38,6 +39,7 @@ A lightweight web app for jam session members to register their name, instrument
 ```
 jam-session/
 ├── main.py           # FastAPI app & API routes
+├── auth.py           # Login/session helpers
 ├── database.py       # SQLite helpers (CRUD operations)
 ├── domain.py         # Shared backend validation and normalization rules
 ├── requirements.txt  # Python dependencies
@@ -81,7 +83,12 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 # 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Start the development server
+# 4. Optional local login settings
+export JAM_SESSION_ADMIN_EMAIL="admin@jam.local"
+export JAM_SESSION_ADMIN_PASSWORD="admin-jam-session"
+export JAM_SESSION_SECRET="change-me-for-production"
+
+# 5. Start the development server
 python main.py
 ```
 
@@ -110,7 +117,7 @@ node --check frontend/app.js
 pytest tests/ -v --tb=short
 ```
 
-Current coverage focuses on API validation, database helpers, domain normalization, Songbook/Bandbook grouping, custom instruments, frontend rendering helpers, and API error handling.
+Current coverage focuses on login/session behavior, owner/admin authorization, API validation, database helpers, domain normalization, Songbook/Bandbook grouping, custom instruments, frontend rendering helpers, and API error handling.
 
 ---
 
@@ -120,10 +127,16 @@ All endpoints are prefixed with `/api`.
 
 | Method   | Endpoint                    | Description                   |
 |----------|-----------------------------|-------------------------------|
+| `GET`    | `/api/session`              | Return current login state    |
+| `POST`   | `/api/login`                | Log in with email/password    |
+| `POST`   | `/api/register`             | Create a member login         |
+| `POST`   | `/api/logout`               | Clear the login session       |
 | `GET`    | `/api/members`              | List all members              |
 | `POST`   | `/api/members`              | Add a profile to members      |
 | `PUT`    | `/api/members/{member_id}` | Update one profile            |
 | `DELETE` | `/api/members/{member_id}` | Remove one profile            |
+
+All member endpoints require a logged-in session cookie. A member can manage only profiles created while logged in with that same email. The admin account can manage all profiles.
 
 ### Members Payload
 
@@ -137,6 +150,21 @@ All endpoints are prefixed with `/api`.
   }
 }
 ```
+
+Responses include `canManage`, a boolean used by the frontend to show or hide edit controls for the current session. The stored owner email is not returned publicly.
+
+### Login Configuration
+
+The login portal is intentionally lightweight for launch. Members create their own email/password login from the portal. That email becomes the owner of any profile they create.
+
+| Environment variable | Purpose | Local default |
+|----------------------|---------|---------------|
+| `JAM_SESSION_ADMIN_EMAIL` | Admin login email | `admin@jam.local` |
+| `JAM_SESSION_ADMIN_PASSWORD` | Admin password | `admin-jam-session` |
+| `JAM_SESSION_SECRET` | Signs browser session cookies | `dev-session-secret-change-me` |
+| `JAM_SESSION_COOKIE_SECURE` | Set to `true` when served over HTTPS | unset / false |
+
+Before production launch, set real values for the admin password and `JAM_SESSION_SECRET`.
 
 ### Validation Rules
 
@@ -179,6 +207,15 @@ sudo systemctl restart jam-session
 
 The Nginx + systemd setup means the app is automatically served and restarts on reboot. No manual service restart is needed for frontend-only changes, but backend code and database startup migrations need the service restart above.
 
+Production should define real login values in the service environment:
+
+```bash
+JAM_SESSION_ADMIN_EMAIL="your-admin-email@example.com"
+JAM_SESSION_ADMIN_PASSWORD="admin-password"
+JAM_SESSION_SECRET="long-random-secret"
+JAM_SESSION_COOKIE_SECURE="true"
+```
+
 ---
 
 ## 🗄 Database
@@ -190,11 +227,18 @@ The Nginx + systemd setup means the app is automatically served and restarts on 
 
 ```sql
 CREATE TABLE members (
-    id        TEXT PRIMARY KEY,
-    name      TEXT NOT NULL,
-    roles     TEXT NOT NULL DEFAULT '[]',   -- JSON array of role IDs
-    songs     TEXT NOT NULL DEFAULT '{}',   -- JSON dict: song -> [role IDs]
-    joinedAt  TEXT NOT NULL
+    id         TEXT PRIMARY KEY,
+    name       TEXT NOT NULL,
+    email      TEXT,                        -- normalized member login email
+    roles      TEXT NOT NULL DEFAULT '[]',  -- JSON array of role IDs
+    songs      TEXT NOT NULL DEFAULT '{}',  -- JSON dict: song -> [role IDs]
+    joined_at  TEXT NOT NULL
+);
+
+CREATE TABLE users (
+    email          TEXT PRIMARY KEY,
+    password_hash  TEXT NOT NULL,
+    created_at     TEXT NOT NULL
 );
 ```
 

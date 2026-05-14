@@ -5,14 +5,23 @@ from pathlib import Path
 
 DB_PATH = Path(os.getenv("JAM_DB_PATH", Path(__file__).parent / "jam.db"))
 TABLE_NAME = "members"
-ACTIVE_MEMBER_COLUMNS = ("id", "name", "roles", "songs", "joinedAt")
+USERS_TABLE_NAME = "users"
+ACTIVE_MEMBER_COLUMNS = ("id", "name", "email", "roles", "songs", "joined_at")
 CREATE_MEMBERS_TABLE_SQL = """
     CREATE TABLE IF NOT EXISTS members (
-        id        TEXT PRIMARY KEY,
-        name      TEXT NOT NULL,
-        roles     TEXT NOT NULL DEFAULT '[]',
-        songs     TEXT NOT NULL DEFAULT '{}',
-        joinedAt  TEXT NOT NULL
+        id         TEXT PRIMARY KEY,
+        name       TEXT NOT NULL,
+        email      TEXT,
+        roles      TEXT NOT NULL DEFAULT '[]',
+        songs      TEXT NOT NULL DEFAULT '{}',
+        joined_at  TEXT NOT NULL
+    )
+"""
+CREATE_USERS_TABLE_SQL = """
+    CREATE TABLE IF NOT EXISTS users (
+        email          TEXT PRIMARY KEY,
+        password_hash  TEXT NOT NULL,
+        created_at     TEXT NOT NULL
     )
 """
 
@@ -45,7 +54,24 @@ def init_db() -> None:
     """Create the members table when starting from a fresh database."""
     with get_connection() as conn:
         conn.execute(CREATE_MEMBERS_TABLE_SQL)
+        conn.execute(CREATE_USERS_TABLE_SQL)
+        cursor = conn.execute(f"PRAGMA table_info({TABLE_NAME})")
+        columns = {r["name"] for r in cursor.fetchall()}
+        if "email" not in columns:
+            conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN email TEXT")
+        if "joined_at" not in columns:
+            conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN joined_at TEXT")
+
+        cursor = conn.execute(f"PRAGMA table_info({USERS_TABLE_NAME})")
+        user_columns = {r["name"] for r in cursor.fetchall()}
+        if "password_hash" not in user_columns:
+            conn.execute(f"ALTER TABLE {USERS_TABLE_NAME} ADD COLUMN password_hash TEXT")
+        if "created_at" not in user_columns:
+            conn.execute(f"ALTER TABLE {USERS_TABLE_NAME} ADD COLUMN created_at TEXT")
+
         conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_name_lower ON {TABLE_NAME}(LOWER(name))")
+        conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_email_lower ON {TABLE_NAME}(LOWER(email))")
+        conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{USERS_TABLE_NAME}_email_lower ON {USERS_TABLE_NAME}(LOWER(email))")
         conn.commit()
 
 
@@ -54,7 +80,7 @@ def init_db() -> None:
 def get_all() -> list[dict]:
     with get_connection() as conn:
         rows = conn.execute(
-            f"SELECT {', '.join(ACTIVE_MEMBER_COLUMNS)} FROM {TABLE_NAME} ORDER BY joinedAt ASC, name ASC"
+            f"SELECT {', '.join(ACTIVE_MEMBER_COLUMNS)} FROM {TABLE_NAME} ORDER BY joined_at ASC, name ASC"
         ).fetchall()
     return [parse_member(r) for r in rows]
 
@@ -70,14 +96,15 @@ def get_by_id(member_id: str) -> dict | None:
 def create(member: dict) -> dict:
     with get_connection() as conn:
         conn.execute(
-            f"INSERT INTO {TABLE_NAME} (id, name, roles, songs, joinedAt) "
-            "VALUES (?, ?, ?, ?, ?)",
+            f"INSERT INTO {TABLE_NAME} (id, name, email, roles, songs, joined_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
             (
                 member["id"],
                 member["name"],
+                member.get("email"),
                 json.dumps(member["roles"]),
                 json.dumps(member["songs"]),
-                member["joinedAt"],
+                member["joined_at"],
             ),
         )
         conn.commit()
@@ -118,3 +145,22 @@ def name_exists(name: str, exclude_id: str | None = None) -> bool:
                 (name,),
             ).fetchone()
     return row is not None
+
+
+def get_user_by_email(email: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            f"SELECT email, password_hash, created_at FROM {USERS_TABLE_NAME} WHERE LOWER(email) = LOWER(?)",
+            (email,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def create_user(email: str, password_hash: str, created_at: str) -> dict:
+    with get_connection() as conn:
+        conn.execute(
+            f"INSERT INTO {USERS_TABLE_NAME} (email, password_hash, created_at) VALUES (?, ?, ?)",
+            (email, password_hash, created_at),
+        )
+        conn.commit()
+    return get_user_by_email(email)

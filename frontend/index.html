@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>JAM Session - Digital Nomads FLN</title>
   <meta name="description" content="Know who plays what at the jam session. Browse members, their instruments, and the songs they perform." />
-  <link rel="stylesheet" href="style.css?v=31" />
+  <link rel="stylesheet" href="style.css?v=34" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎼</text></svg>" />
 </head>
 <body>
@@ -27,6 +27,13 @@
       </div>
 
       <div class="header-actions">
+        <div id="auth-status" class="auth-status" aria-live="polite">Browsing</div>
+        <button id="login-btn" class="btn btn-secondary">
+          Log in
+        </button>
+        <button id="logout-btn" class="btn btn-secondary hidden">
+          Log out
+        </button>
         <button id="add-member-btn" class="btn btn-primary">
           + Add Member
         </button>
@@ -71,6 +78,6 @@
   <!-- ===== TOASTS ===== -->
   <div class="toast-container" id="toast-container" aria-live="polite"></div>
 
-  <script src="app.js?v=31"></script>
+  <script src="app.js?v=34"></script>
 </body>
 </html>

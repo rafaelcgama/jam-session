@@ -41,6 +41,10 @@ body {
   line-height: 1.6;
   overflow-x: hidden;
 }
+body.login-required header,
+body.login-required main {
+  display: none;
+}
 
 /* ===== BACKGROUND GLOW ===== */
 body::before {
@@ -117,6 +121,18 @@ header {
   display: flex;
   gap: 0.75rem;
   align-items: center;
+}
+.auth-status {
+  max-width: 180px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.auth-status.authenticated {
+  color: var(--neon-green);
 }
 
 /* ===== SEARCH ===== */
@@ -200,6 +216,11 @@ header {
   color: #ff6b7a;
 }
 .btn-danger:hover { background: rgba(220,53,69,0.22); }
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
+}
 
 /* ===== MAIN LAYOUT ===== */
 main {
@@ -498,6 +519,13 @@ main {
   opacity: 1;
   pointer-events: all;
 }
+body.login-required .modal-overlay {
+  background: var(--bg-base);
+  backdrop-filter: none;
+}
+body.login-required .modal {
+  max-width: 420px;
+}
 
 /* ===== MODAL ===== */
 .modal {
@@ -784,6 +812,13 @@ main {
     height: auto;
   }
   .logo { flex: 1; }
+  .header-actions {
+    gap: 0.45rem;
+    justify-content: flex-end;
+  }
+  .auth-status {
+    display: none;
+  }
   .logo-img { height: 32px; }
   .logo-title { font-size: 1.15rem; }
   .logo-subtitle { font-size: 0.65rem; }

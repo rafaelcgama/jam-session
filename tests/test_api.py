@@ -26,8 +26,26 @@ def isolated_db(tmp_path, monkeypatch):
 from main import app
 
 @pytest.fixture
-def client():
+def anon_client():
     return TestClient(app)
+
+
+def login(client, email="member@example.com", password="memberpass"):
+    return client.post("/api/login", json={"email": email, "password": password})
+
+
+def register(client, email="new.member@example.com", password="memberpass"):
+    return client.post("/api/register", json={"email": email, "password": password})
+
+
+@pytest.fixture
+def client():
+    test_client = TestClient(app)
+    register(test_client, email="member@example.com", password="memberpass")
+    test_client.post("/api/logout")
+    res = login(test_client)
+    assert res.status_code == 200
+    return test_client
 
 
 class TestAppMetadata:
@@ -35,6 +53,102 @@ class TestAppMetadata:
         res = client.get("/openapi.json")
         assert res.status_code == 200
         assert res.json()["info"]["version"] == "1.4.0"
+
+
+class TestAuth:
+    def test_session_is_anonymous_before_login(self, anon_client):
+        res = anon_client.get("/api/session")
+
+        assert res.status_code == 200
+        assert res.json() == {"authenticated": False, "email": None, "isAdmin": False}
+
+    def test_member_login_sets_session_cookie(self, anon_client):
+        register(anon_client, email="Carlos@Example.com", password="memberpass")
+        anon_client.post("/api/logout")
+
+        res = login(anon_client, email="Carlos@Example.com", password="memberpass")
+
+        assert res.status_code == 200
+        assert res.json() == {"authenticated": True, "email": "carlos@example.com", "isAdmin": False}
+        assert "jam_session_auth" in anon_client.cookies
+
+    def test_register_creates_member_login_and_session(self, anon_client):
+        res = register(anon_client, email="Ana@Example.com", password="strong-pass")
+
+        assert res.status_code == 201
+        assert res.json() == {"authenticated": True, "email": "ana@example.com", "isAdmin": False}
+        assert "jam_session_auth" in anon_client.cookies
+
+    def test_registered_member_can_log_in_later(self, anon_client):
+        register(anon_client, email="ana@example.com", password="strong-pass")
+        anon_client.post("/api/logout")
+
+        res = login(anon_client, email="ana@example.com", password="strong-pass")
+
+        assert res.status_code == 200
+        assert res.json()["email"] == "ana@example.com"
+
+    def test_rejects_duplicate_registration(self, anon_client):
+        register(anon_client, email="ana@example.com", password="strong-pass")
+
+        res = register(anon_client, email="ANA@example.com", password="strong-pass")
+
+        assert res.status_code == 409
+
+    def test_rejects_short_registration_password(self, anon_client):
+        res = register(anon_client, email="ana@example.com", password="12345")
+
+        assert res.status_code == 400
+
+    def test_rejects_invalid_registration_email(self, anon_client):
+        res = register(anon_client, email="not-an-email", password="strong-pass")
+
+        assert res.status_code == 400
+        assert "email" in res.json()["detail"].lower()
+
+    def test_rejects_registration_for_admin_email(self, anon_client):
+        res = register(anon_client, email="admin@jam.local", password="strong-pass")
+
+        assert res.status_code == 400
+        assert "admin" in res.json()["detail"].lower()
+
+    def test_registered_user_password_hash_is_not_plaintext(self, anon_client):
+        register(anon_client, email="ana@example.com", password="strong-pass")
+
+        saved_user = database.get_user_by_email("ana@example.com")
+
+        assert saved_user["password_hash"] != "strong-pass"
+        assert saved_user["password_hash"].startswith("pbkdf2_sha256$")
+
+    def test_admin_login_is_marked_admin(self, anon_client):
+        res = login(anon_client, email="admin@jam.local", password="admin-jam-session")
+
+        assert res.status_code == 200
+        assert res.json()["isAdmin"] is True
+
+    def test_rejects_invalid_login(self, anon_client):
+        register(anon_client, email="member@example.com", password="memberpass")
+        anon_client.post("/api/logout")
+
+        res = login(anon_client, password="wrong")
+
+        assert res.status_code == 401
+        assert "Invalid email or password" in res.json()["detail"]
+
+    def test_logout_clears_session(self, client):
+        res = client.post("/api/logout")
+
+        assert res.status_code == 200
+        assert client.get("/api/session").json()["authenticated"] is False
+
+    def test_create_requires_login(self, anon_client):
+        res = anon_client.post("/api/members", json={
+            "name": "Carlos",
+            "roles": ["guitarist"],
+            "songs": {},
+        })
+
+        assert res.status_code == 401
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────
@@ -51,6 +165,11 @@ def create_member(client, name="Carlos", roles=None, songs=None):
 # GET /api/members
 # ─────────────────────────────────────────────────────────────────────────────
 class TestListMembers:
+    def test_requires_login(self, anon_client):
+        res = anon_client.get("/api/members")
+
+        assert res.status_code == 401
+
     def test_returns_empty_list_initially(self, client):
         res = client.get("/api/members")
         assert res.status_code == 200
@@ -62,6 +181,29 @@ class TestListMembers:
         res = client.get("/api/members")
         assert res.status_code == 200
         assert len(res.json()) == 2
+
+    def test_response_hides_member_email(self, client):
+        create_member(client, name="Carlos")
+
+        body = client.get("/api/members").json()[0]
+
+        assert "email" not in body
+
+    def test_owner_list_marks_own_profile_manageable(self, client):
+        create_member(client, name="Carlos")
+
+        body = client.get("/api/members").json()[0]
+
+        assert body["canManage"] is True
+
+    def test_other_member_list_marks_profile_not_manageable(self, client):
+        create_member(client, name="Carlos")
+        register(client, email="sofia@example.com", password="sofiapass")
+
+        body = client.get("/api/members").json()[0]
+
+        assert body["name"] == "Carlos"
+        assert body["canManage"] is False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -76,8 +218,9 @@ class TestCreateMember:
         assert "guitarist" in body["roles"]
         assert "singer" in body["roles"]
         assert "id" in body
-        assert "joinedAt" in body
-        assert set(body) == {"id", "name", "roles", "songs", "joinedAt"}
+        assert "joined_at" in body
+        assert body["canManage"] is True
+        assert set(body) == {"id", "name", "roles", "songs", "joined_at", "canManage"}
 
     def test_creates_member_with_songs(self, client):
         songs = {"Wonderwall": ["guitarist"], "Sweet Child": ["guitarist", "singer"]}
@@ -265,6 +408,39 @@ class TestUpdateMember:
         assert res.status_code == 409
         assert "already in the session" in res.json()["detail"]
 
+    def test_rejects_anonymous_update(self, client, anon_client):
+        member_id = create_member(client, name="Carlos").json()["id"]
+
+        res = anon_client.put(f"/api/members/{member_id}", json={
+            "name": "Carlos", "roles": ["guitarist"], "songs": {}
+        })
+
+        assert res.status_code == 401
+
+    def test_rejects_update_from_another_member(self, client):
+        member_id = create_member(client, name="Carlos").json()["id"]
+        register(client, email="sofia@example.com", password="sofiapass")
+
+        res = client.put(f"/api/members/{member_id}", json={
+            "name": "Carlos", "roles": ["guitarist"], "songs": {}
+        })
+
+        assert res.status_code == 403
+
+    def test_admin_can_update_any_member(self, client):
+        member_id = create_member(client, name="Carlos").json()["id"]
+        login(client, email="admin@jam.local", password="admin-jam-session")
+
+        res = client.put(f"/api/members/{member_id}", json={
+            "name": "Admin Renamed",
+            "roles": ["singer"],
+            "songs": {},
+        })
+
+        assert res.status_code == 200
+        assert res.json()["name"] == "Admin Renamed"
+        assert res.json()["canManage"] is True
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DELETE /api/members/{id}
@@ -283,6 +459,29 @@ class TestDeleteMember:
         res = client.delete("/api/members/nonexistent-id")
         assert res.status_code == 404
 
+    def test_rejects_anonymous_delete(self, client, anon_client):
+        member_id = create_member(client).json()["id"]
+
+        res = anon_client.delete(f"/api/members/{member_id}")
+
+        assert res.status_code == 401
+
+    def test_rejects_delete_from_another_member(self, client):
+        member_id = create_member(client).json()["id"]
+        register(client, email="sofia@example.com", password="sofiapass")
+
+        res = client.delete(f"/api/members/{member_id}")
+
+        assert res.status_code == 403
+
+    def test_admin_can_delete_any_member(self, client):
+        member_id = create_member(client).json()["id"]
+        login(client, email="admin@jam.local", password="admin-jam-session")
+
+        res = client.delete(f"/api/members/{member_id}")
+
+        assert res.status_code == 200
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Database layer unit tests
@@ -299,7 +498,7 @@ class TestDatabase:
             "name": "Carlos",
             "roles": ["guitarist"],
             "songs": {},
-            "joinedAt": str(date.today()),
+            "joined_at": str(date.today()),
         }
         database.create(member)
         assert database.name_exists("Carlos") is True
@@ -313,7 +512,7 @@ class TestDatabase:
             "name": "Carlos",
             "roles": ["guitarist"],
             "songs": {},
-            "joinedAt": str(date.today()),
+            "joined_at": str(date.today()),
         }
         database.create(member)
         # Should NOT count itself as a duplicate when updating
@@ -331,7 +530,7 @@ class TestDatabase:
             "name": "Ana",
             "roles": ["singer", "guitarist"],
             "songs": {"Hey Jude": ["singer"]},
-            "joinedAt": str(date.today()),
+            "joined_at": str(date.today()),
         }
         database.create(member)
         result = database.get_by_id(mid)
@@ -343,7 +542,7 @@ class TestDatabase:
     def test_parse_member_falls_back_when_json_columns_are_malformed(self):
         with database.get_connection() as conn:
             conn.execute(
-                "INSERT INTO members (id, name, roles, songs, joinedAt) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO members (id, name, roles, songs, joined_at) VALUES (?, ?, ?, ?, ?)",
                 ("bad-json", "Ana", "not-json", '"not-a-dict"', "2026-05-14"),
             )
 
@@ -351,6 +550,14 @@ class TestDatabase:
 
         assert result["roles"] == []
         assert result["songs"] == {}
+
+    def test_user_accounts_can_be_created_and_loaded_by_email(self):
+        database.create_user("ana@example.com", "hashed", "2026-05-14")
+
+        result = database.get_user_by_email("ANA@example.com")
+
+        assert result["email"] == "ana@example.com"
+        assert result["password_hash"] == "hashed"
 
 
 class TestDomainNormalization:

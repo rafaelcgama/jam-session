@@ -38,6 +38,10 @@ const ROLES = [
 const ROLE_MAP = Object.fromEntries(ROLES.map(r => [r.id, r]));
 
 const API = '/api/members';
+const SESSION_API = '/api/session';
+const LOGIN_API = '/api/login';
+const REGISTER_API = '/api/register';
+const LOGOUT_API = '/api/logout';
 
 // ===== STATE =====
 let members = [];   // in-memory cache from server
@@ -54,6 +58,10 @@ let state = {
   pendingSongRoles: [],
   pendingOtherInstrument: '',
   otherDropdownOpen: false,
+  session: { authenticated: false, email: null, isAdmin: false },
+  afterLoginAction: null,
+  loginLocked: false,
+  authMode: 'login',
 };
 let modalBackStack = [];
 
@@ -61,6 +69,7 @@ let modalBackStack = [];
 async function apiFetch(url, options = {}) {
   const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
     ...options,
   });
   const contentType = res.headers.get('content-type') || '';
@@ -75,6 +84,138 @@ async function loadMembers() {
   showGridLoading();
   members = await apiFetch(API);
   renderMembers();
+}
+
+async function loadSession() {
+  state.session = await apiFetch(SESSION_API);
+  renderAuthControls();
+  return state.session;
+}
+
+function canManageMember(member, sessionOverride = state.session) {
+  if (!member) return false;
+  return Boolean(sessionOverride?.authenticated && (sessionOverride.isAdmin || member.canManage));
+}
+
+function formatSessionLabel(session = state.session) {
+  if (!session?.authenticated) return 'Browsing';
+  return session.isAdmin ? `Admin: ${session.email}` : session.email;
+}
+
+function renderAuthControls() {
+  const status = document.getElementById('auth-status');
+  const loginBtn = document.getElementById('login-btn');
+  const logoutBtn = document.getElementById('logout-btn');
+  if (!status || !loginBtn || !logoutBtn) return;
+
+  status.textContent = formatSessionLabel();
+  status.classList.toggle('authenticated', Boolean(state.session?.authenticated));
+  loginBtn.classList.toggle('hidden', Boolean(state.session?.authenticated));
+  logoutBtn.classList.toggle('hidden', !state.session?.authenticated);
+}
+
+function setLoginRequired(required) {
+  state.loginLocked = Boolean(required);
+  document.body?.classList.toggle('login-required', state.loginLocked);
+}
+
+function requireLogin(nextAction = null) {
+  if (state.session?.authenticated) return true;
+  state.afterLoginAction = nextAction;
+  openLoginModal({ locked: false, mode: 'login' });
+  return false;
+}
+
+function openLoginModal({ locked = false, mode = 'login' } = {}) {
+  setLoginRequired(locked);
+  state.authMode = mode === 'register' ? 'register' : 'login';
+  const isRegister = state.authMode === 'register';
+  const closeButton = locked ? '' : '<button class="modal-close" id="modal-close-btn">✕</button>';
+  const cancelButton = locked ? '' : '<button class="btn btn-secondary" type="button" id="modal-close-btn2">Cancel</button>';
+  const secondaryAction = isRegister
+    ? '<button class="btn btn-ghost" type="button" id="switch-auth-mode-btn">Already have an account? Log in</button>'
+    : '<button class="btn btn-ghost" type="button" id="switch-auth-mode-btn">Create profile</button>';
+
+  setModalContent(`
+    <div class="modal-header">
+      <div class="modal-title">${isRegister ? 'Create profile' : 'Log in'}</div>
+      ${closeButton}
+    </div>
+
+    <form id="login-form">
+      <div class="form-group">
+        <label class="form-label" for="login-email">Email</label>
+        <input id="login-email" class="form-input" type="email" autocomplete="email" placeholder="you@example.com" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="login-password">Password</label>
+        <input id="login-password" class="form-input" type="password" autocomplete="current-password" placeholder="Password" required />
+      </div>
+      <div class="form-actions">
+        ${secondaryAction}
+        ${cancelButton}
+        <button class="btn btn-primary" type="submit" id="login-submit-btn">${isRegister ? 'Create profile' : 'Log in'}</button>
+      </div>
+    </form>
+  `);
+
+  document.getElementById('modal-close-btn')?.addEventListener('click', closeModal);
+  document.getElementById('modal-close-btn2')?.addEventListener('click', closeModal);
+  document.getElementById('switch-auth-mode-btn')?.addEventListener('click', () => {
+    openLoginModal({ locked: state.loginLocked, mode: isRegister ? 'login' : 'register' });
+  });
+  document.getElementById('login-form').addEventListener('submit', handleLoginSubmit);
+  openModal();
+  setTimeout(() => document.getElementById('login-email')?.focus(), 0);
+}
+
+async function handleLoginSubmit(e) {
+  e.preventDefault();
+  const emailInput = document.getElementById('login-email');
+  const passwordInput = document.getElementById('login-password');
+  const submitBtn = document.getElementById('login-submit-btn');
+  const defaultText = submitBtn.textContent;
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = state.authMode === 'register' ? 'Creating...' : 'Logging in...';
+
+  try {
+    state.session = await apiFetch(state.authMode === 'register' ? REGISTER_API : LOGIN_API, {
+      method: 'POST',
+      body: JSON.stringify({
+        email: emailInput.value.trim(),
+        password: passwordInput.value,
+      }),
+    });
+    renderAuthControls();
+    setLoginRequired(false);
+    await loadMembers();
+    closeModal();
+    toast(state.authMode === 'register' ? 'Profile login created' : 'Logged in', 'success');
+    const nextAction = state.authMode === 'register' ? openAddModal : state.afterLoginAction;
+    state.afterLoginAction = null;
+    if (typeof nextAction === 'function') setTimeout(nextAction, 150);
+  } catch (err) {
+    toast(err.message, 'error');
+    submitBtn.disabled = false;
+    submitBtn.textContent = defaultText;
+    passwordInput.select();
+  }
+}
+
+async function logout() {
+  try {
+    await apiFetch(LOGOUT_API, { method: 'POST' });
+    state.session = { authenticated: false, email: null, isAdmin: false };
+    state.afterLoginAction = null;
+    members = [];
+    renderAuthControls();
+    renderMembers();
+    openLoginModal({ locked: true, mode: 'login' });
+    toast('Logged out', 'success');
+  } catch (err) {
+    toast(err.message, 'error');
+  }
 }
 
 // ===== UTILS =====
@@ -309,18 +450,18 @@ function renderMembers() {
     });
     const stopPrag = e => e.stopPropagation();
     ['click', 'pointerdown', 'touchstart'].forEach(eventType => {
-      card.querySelector('.btn-view').addEventListener(eventType, stopPrag);
-      card.querySelector('.btn-edit').addEventListener(eventType, stopPrag);
-      card.querySelector('.btn-del').addEventListener(eventType, stopPrag);
+      card.querySelector('.btn-view')?.addEventListener(eventType, stopPrag);
+      card.querySelector('.btn-edit')?.addEventListener(eventType, stopPrag);
+      card.querySelector('.btn-del')?.addEventListener(eventType, stopPrag);
     });
 
-    card.querySelector('.btn-view').addEventListener('click', () => {
+    card.querySelector('.btn-view')?.addEventListener('click', () => {
       openCardProfile();
     });
-    card.querySelector('.btn-edit').addEventListener('click', () => {
+    card.querySelector('.btn-edit')?.addEventListener('click', () => {
       openEditModal(card.dataset.id);
     });
-    card.querySelector('.btn-del').addEventListener('click', () => {
+    card.querySelector('.btn-del')?.addEventListener('click', () => {
       openDeleteModal(card.dataset.id, card.dataset.name);
     });
   });
@@ -639,6 +780,7 @@ function openBandModal(bandName, songsMap, options = {}) {
 function renderCard(m) {
   const accentColor = getRole(m.roles[0])?.color || '#5b8cff';
   const safeName = escapeHtml(m.name);
+  const canManage = canManageMember(m);
 
   const rolesHtml = m.roles.map(rid => {
     const role = getRole(rid);
@@ -673,6 +815,11 @@ function renderCard(m) {
 
   const songCount = songKeys.length;
 
+  const manageButtons = canManage ? `
+        <button class="btn btn-secondary btn-edit" style="flex:1;justify-content:center">✏️ Edit</button>
+        <button class="btn btn-danger btn-del" title="Remove from members">🗑</button>
+  ` : '';
+
   return `
     <div class="member-card" data-id="${escapeAttr(m.id)}" data-name="${escapeAttr(m.name)}"
          style="--accent-color:${accentColor}22" role="button" tabindex="0" aria-label="View ${escapeAttr(m.name)} profile">
@@ -689,8 +836,7 @@ function renderCard(m) {
       <div class="card-songs">${songsHtml}</div>
       <div class="card-footer">
         <button class="btn btn-secondary btn-view" style="flex:1;justify-content:center">👁 View All</button>
-        <button class="btn btn-secondary btn-edit" style="flex:1;justify-content:center">✏️ Edit</button>
-        <button class="btn btn-danger btn-del" title="Remove from members">🗑</button>
+        ${manageButtons}
       </div>
     </div>`;
 }
@@ -815,6 +961,11 @@ function openViewModal(id, options = {}) {
   }
 
   const songCount = songKeys.length;
+  const editActions = canManageMember(m) ? `
+    <div class="form-actions">
+      <button class="btn btn-secondary" id="modal-edit-btn">✏️ Edit Profile</button>
+    </div>
+  ` : '';
 
   setModalContent(`
     <div class="modal-header">
@@ -832,13 +983,11 @@ function openViewModal(id, options = {}) {
       <button class="modal-close" id="modal-close-btn">✕</button>
     </div>
     <div class="detail-roles">${songsHtml}</div>
-    <div class="form-actions">
-      <button class="btn btn-secondary" id="modal-edit-btn">✏️ Edit Profile</button>
-    </div>
+    ${editActions}
   `);
 
   document.getElementById('modal-close-btn').addEventListener('click', closeModal);
-  document.getElementById('modal-edit-btn').addEventListener('click', () => {
+  document.getElementById('modal-edit-btn')?.addEventListener('click', () => {
     closeModal();
     setTimeout(() => openEditModal(id), 200);
   });
@@ -854,6 +1003,12 @@ function openMemberProfileByName(name, options = {}) {
 
 // ===== DELETE MODAL =====
 function openDeleteModal(id, name) {
+  const member = members.find(x => x.id === id);
+  if (!canManageMember(member)) {
+    toast('Log in as this member or admin to remove this profile', 'error');
+    return;
+  }
+
   setModalContent(`
     <div class="modal-header">
       <div class="modal-title">Remove Member</div>
@@ -892,6 +1047,7 @@ function openDeleteModal(id, name) {
 
 // ===== ADD / EDIT MODAL =====
 function openAddModal() {
+  if (!requireLogin(openAddModal)) return;
   state.editingId = null;
   state.editRoles = [];
   state.editSongs = {};
@@ -904,6 +1060,10 @@ function openAddModal() {
 function openEditModal(id) {
   const m = members.find(x => x.id === id);
   if (!m) return;
+  if (!canManageMember(m)) {
+    toast('Log in as this member or admin to edit this profile', 'error');
+    return;
+  }
   state.editingId = id;
   state.editRoles = [...m.roles];
   state.editSongs = JSON.parse(JSON.stringify(m.songs));
@@ -1372,6 +1532,7 @@ function openModal() {
 }
 
 function closeModal({ clearHistory = true } = {}) {
+  if (state.loginLocked) return;
   document.getElementById('modal-overlay').classList.remove('open');
   document.body.style.overflow = '';
   state.editingId = null;
@@ -1445,7 +1606,9 @@ function handleDocumentClick(e) {
 
 // ===== INIT =====
 async function init() {
+  setLoginRequired(true);
   renderFilterChips();
+  renderAuthControls();
 
   document.getElementById('search-input').addEventListener('input', e => {
     state.search = e.target.value;
@@ -1453,12 +1616,14 @@ async function init() {
   });
 
   document.getElementById('add-member-btn').addEventListener('click', openAddModal);
+  document.getElementById('login-btn')?.addEventListener('click', () => openLoginModal({ locked: false, mode: 'login' }));
+  document.getElementById('logout-btn')?.addEventListener('click', logout);
 
   document.getElementById('modal-overlay').addEventListener('click', e => {
-    if (e.target === e.currentTarget) closeModal();
+    if (!state.loginLocked && e.target === e.currentTarget) closeModal();
   });
 
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !state.loginLocked) closeModal(); });
   document.addEventListener('click', handleDocumentClick);
   window.addEventListener('popstate', () => {
     if (!restorePreviousModal()) closeModal({ clearHistory: false });
@@ -1528,6 +1693,14 @@ async function init() {
   });
 
   try {
+    await loadSession();
+    if (!state.session?.authenticated) {
+      members = [];
+      renderMembers();
+      openLoginModal({ locked: true, mode: 'login' });
+      return;
+    }
+    setLoginRequired(false);
     await loadMembers();
   } catch (err) {
     console.error(err);
@@ -1550,10 +1723,12 @@ if (typeof module !== 'undefined' && module.exports) {
     buildBandbookFrom,
     buildSongbookFrom,
     buildSelectedSongRoles,
+    canManageMember,
     decodeDataValue,
     encodeDataValue,
     escapeAttr,
     escapeHtml,
+    formatSessionLabel,
     formatSongTitle,
     getInitials,
     getCustomRoleOptions,

@@ -8,14 +8,15 @@ Open it here: https://dnomads-jam-fln.duckdns.org
 
 ## Add Yourself
 
-1. Click **+ Add Member**.
-2. Write your name.
-3. Search for a song you like to play or sing.
-4. Click the song when it shows up.
-5. Choose what you play or sing on that song.
-6. Click **+ Add Song**.
-7. Add another song if you feel like it.
-8. Click **Save**.
+1. Click **Create profile**.
+2. Enter your email and choose a password.
+3. Write your name.
+4. Search for a song you like to play or sing.
+5. Click the song when it shows up.
+6. Choose what you play or sing on that song.
+7. Click **+ Add Song**.
+8. Add another song if you feel like it.
+9. Click **Save**.
 
 Done. You are on the list.
 
@@ -70,17 +71,21 @@ Songs without a clear artist may show up under **Originals / Unknown**.
 
 Need to add a song, remove one, or fix something?
 
-1. Find yourself in **The Crew**.
-2. Click **Edit**.
-3. Change whatever you need.
-4. Click **Save**.
+1. Log in with the same email and password you used when you added yourself.
+2. Find yourself in **The Crew**.
+3. Click **Edit**.
+4. Change whatever you need.
+5. Click **Save**.
+
+Only you and the admin can edit or remove your profile.
 
 ## Remove Someone
 
 If a profile was added by mistake, or someone wants it removed:
 
-1. Find the person in **The Crew**.
-2. Click the trash button.
-3. Confirm it.
+1. Log in with the same email used for that profile, or ask the admin.
+2. Find the person in **The Crew**.
+3. Click the trash button.
+4. Confirm it.
 
 That is it. Add a few songs, find people to play with, and make some noise.

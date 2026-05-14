@@ -44,20 +44,38 @@ test('rejects delimiter-only song titles during normalization', () => {
 
 test('surfaces API detail messages from failed requests', async () => {
   const originalFetch = global.fetch;
-  global.fetch = async () => ({
-    ok: false,
-    headers: { get: () => 'application/json' },
-    json: async () => ({ detail: 'Other instrument name is required' }),
-  });
+  let fetchOptions;
+  global.fetch = async (_url, options) => {
+    fetchOptions = options;
+    return {
+      ok: false,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ detail: 'Other instrument name is required' }),
+    };
+  };
 
   try {
     await assert.rejects(
       () => app.apiFetch('/api/members'),
       /Other instrument name is required/
     );
+    assert.equal(fetchOptions.credentials, 'same-origin');
   } finally {
     global.fetch = originalFetch;
   }
+});
+
+test('formats the auth status label for visitors, members, and admin', () => {
+  assert.equal(app.formatSessionLabel({ authenticated: false }), 'Browsing');
+  assert.equal(app.formatSessionLabel({ authenticated: true, email: 'ana@example.com', isAdmin: false }), 'ana@example.com');
+  assert.equal(app.formatSessionLabel({ authenticated: true, email: 'admin@example.com', isAdmin: true }), 'Admin: admin@example.com');
+});
+
+test('allows management only for admin or server-authorized profiles', () => {
+  assert.equal(app.canManageMember({ canManage: true }, { authenticated: true, isAdmin: false }), true);
+  assert.equal(app.canManageMember({ canManage: false }, { authenticated: true, isAdmin: false }), false);
+  assert.equal(app.canManageMember({ canManage: false }, { authenticated: true, isAdmin: true }), true);
+  assert.equal(app.canManageMember(null, { authenticated: true, isAdmin: true }), false);
 });
 
 test('keeps Other as the final instrument with the clef icon', () => {
