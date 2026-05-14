@@ -11,12 +11,14 @@ A lightweight web app for jam session members to register their name, instrument
 - Add members with their name, instruments, and song repertoire
 - View, edit, or remove profiles from the crew grid
 - Filter the crew by instrument and search by members or songs
+- Filter `Other` instruments down to the specific custom instrument saved by members
 - Songbook tab that groups all registered songs and shows who can play each instrument
 - Bandbook tab that groups songs by artist/band from `Artist - Song` titles
 - Instant Band breakdowns for a song, with clickable badges for members that open profiles without leaving Songbook or Bandbook
 - Apple Music song autocomplete when adding repertoire; songs are selected from listed results for consistent grouping
 - Song-first data model: add a song once, assign multiple instruments to it
 - `Other` instrument option with a custom instrument name field and the shared clef icon
+- Shared backend domain rules for member names, custom instruments, and song normalization
 - Server-side validation for duplicate names, unknown instruments, blank song titles, and songs without instruments
 - Safer frontend rendering for user-provided names, band names, and song titles
 - Fully responsive and mobile-friendly
@@ -42,6 +44,7 @@ A lightweight web app for jam session members to register their name, instrument
 jam-session/
 ├── main.py           # FastAPI app & API routes
 ├── database.py       # SQLite helpers (CRUD operations)
+├── domain.py         # Shared backend validation and normalization rules
 ├── requirements.txt  # Python dependencies
 ├── jam.db            # Local SQLite database (gitignored)
 ├── frontend/
@@ -111,7 +114,7 @@ node --check frontend/app.js
 pytest tests/ -v --tb=short
 ```
 
-Current coverage focuses on API validation, database helpers, Songbook/Bandbook grouping, frontend escaping, and dataset encoding helpers.
+Current coverage focuses on API validation, database helpers, domain normalization, Songbook/Bandbook grouping, custom instruments, frontend escaping, and API error handling.
 
 ---
 
@@ -145,8 +148,10 @@ All endpoints are prefixed with `/api`.
 - `name` is required and must be unique case-insensitively.
 - `roles` must include at least one known instrument.
 - Custom instruments are stored as `other:Instrument Name` and display with the clef icon.
+- Member and custom instrument names are title-cased and simplified to ASCII for consistency.
 - Song titles must contain visible text after sanitization.
 - Remaster-only song suffixes like `(Remastered)` and `- 2014 Remaster` are removed so Songbook grouping stays clean.
+- Hyphens inside song titles are preserved; only the first `Artist - Song` delimiter is used for normalization.
 - Every song must include at least one known instrument.
 - Duplicate role IDs are removed while preserving order.
 - Song instruments are merged into the profile's role list so profile cards and song breakdowns stay consistent.
@@ -218,7 +223,7 @@ The script:
 
 This is an intentional one-way refresh from production to local. It keeps costs at zero while keeping development data separate by default.
 
-Existing names in members can be normalized to the app's title-case convention with:
+Existing names in members can be normalized to the app's simple ASCII title-case convention with:
 
 ```bash
 ./scripts/migrate_names_title_case.py ./jam.db
@@ -281,6 +286,7 @@ This updates `prod-jam.db` from the VM. In DataGrip, refresh the data source/tab
 
 | Version | Description                                             |
 |---------|---------------------------------------------------------|
+| `v1.3.0` | Shared domain normalization, custom `Other` instrument filtering, stronger API errors, safer SQLite settings, and broader frontend/backend tests |
 | `v1.2.0` | Songbook and Bandbook polish, profile links from song/band breakdowns, safer frontend rendering, stricter API validation, frontend unit tests |
 | `v1.1.0` | Songbook/Bandbook views, members search improvements, iTunes autocomplete, dynamic section titles |
 | `v1.0.0` | Initial production release — song-first data model, live on GCP |

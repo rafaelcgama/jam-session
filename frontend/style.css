@@ -261,17 +261,34 @@ main {
   color: var(--neon-blue);
 }
 .chip-icon { font-size: 0.9rem; }
-.custom-filter-row {
-  display: flex;
-  flex-basis: 100%;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: -0.25rem;
-  padding-left: 0.35rem;
+.other-filter-wrap {
+  position: relative;
+  display: inline-block;
 }
-.custom-filter-row .chip {
-  background: rgba(91,140,255,0.08);
-  border-style: dashed;
+.other-dropdown-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 150px;
+  padding: 0.4rem;
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  z-index: 100;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.8);
+  text-align: left;
+}
+.other-dropdown-menu .chip {
+  width: 100%;
+  justify-content: flex-start;
+  margin: 0;
+  padding: 0.4rem 0.6rem;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 /* ===== MEMBERS GRID ===== */

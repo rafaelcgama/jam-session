@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 import sys
 import sqlite3
-import unicodedata
 from pathlib import Path
 
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT_DIR))
+
+from domain import normalize_member_name
+
 TABLE_NAME = "members"
-
-
-def title_case_name(name: str) -> str:
-    ascii_name = "".join(c for c in unicodedata.normalize("NFKD", name) if not unicodedata.combining(c))
-    return " ".join(part.title() for part in ascii_name.strip().split())
 
 
 def migrate_db(db_path: Path):
@@ -34,7 +33,7 @@ def migrate_db(db_path: Path):
         rows = cursor.execute(f"SELECT id, name FROM {TABLE_NAME}").fetchall()
         seen_names: dict[str, str] = {}
         for row in rows:
-            new_name = title_case_name(row["name"])
+            new_name = normalize_member_name(row["name"])
             key = new_name.casefold()
             if key in seen_names and seen_names[key] != row["id"]:
                 print(f"Error: migration would create duplicate member name '{new_name}'.")
@@ -45,7 +44,7 @@ def migrate_db(db_path: Path):
         for row in rows:
             member_id = row["id"]
             old_name = row["name"]
-            new_name = title_case_name(old_name)
+            new_name = normalize_member_name(old_name)
 
             if old_name != new_name:
                 print(f"Updating name: '{old_name}' -> '{new_name}'")

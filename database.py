@@ -1,15 +1,18 @@
 import sqlite3
 import json
+import os
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent / "jam.db"
+DB_PATH = Path(os.getenv("JAM_DB_PATH", Path(__file__).parent / "jam.db"))
 TABLE_NAME = "members"
 LEGACY_TABLE_NAME = "musicians"
 
 def get_connection() -> sqlite3.Connection:
     """Open a connection with row_factory so rows behave like dicts."""
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout = 5000")
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
@@ -46,6 +49,7 @@ def init_db() -> None:
                 joinedAt  TEXT NOT NULL
             )
         """)
+        conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_name_lower ON {TABLE_NAME}(LOWER(name))")
         conn.commit()
 
 

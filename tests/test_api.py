@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 # ── Override DB path to use an in-memory / temp DB during tests ──────────────
 import database
+from domain import normalize_member_name, sanitize_song_key
 
 @pytest.fixture(autouse=True)
 def isolated_db(tmp_path, monkeypatch):
@@ -109,6 +110,20 @@ class TestCreateMember:
         assert res.status_code == 201
         assert res.json()["name"] == "Paula Santos"
 
+    def test_strips_accents_when_normalizing_member_name(self, client):
+        res = client.post("/api/members", json={"name": "  zazá  ", "roles": ["singer"], "songs": {}})
+        assert res.status_code == 201
+        assert res.json()["name"] == "Zaza"
+
+    def test_rejects_color_index_outside_avatar_palette(self, client):
+        res = client.post("/api/members", json={
+            "name": "Carlos",
+            "colorIdx": 99,
+            "roles": ["guitarist"],
+            "songs": {},
+        })
+        assert res.status_code == 422
+
     def test_rejects_unknown_profile_role(self, client):
         res = client.post("/api/members", json={"name": "Carlos", "roles": ["triangle"], "songs": {}})
         assert res.status_code == 400
@@ -117,12 +132,12 @@ class TestCreateMember:
     def test_accepts_custom_other_instrument(self, client):
         res = client.post("/api/members", json={
             "name": "Carlos",
-            "roles": ["other:berimbau"],
-            "songs": {"Untitled Jam": ["other:berimbau"]},
+            "roles": ["other:cavaco elétrico"],
+            "songs": {"Untitled Jam": ["other:cavaco elétrico"]},
         })
         assert res.status_code == 201
-        assert res.json()["roles"] == ["other:Berimbau"]
-        assert res.json()["songs"] == {"Untitled Jam": ["other:Berimbau"]}
+        assert res.json()["roles"] == ["other:Cavaco Eletrico"]
+        assert res.json()["songs"] == {"Untitled Jam": ["other:Cavaco Eletrico"]}
 
     def test_rejects_bare_other_instrument(self, client):
         res = client.post("/api/members", json={
@@ -177,6 +192,15 @@ class TestCreateMember:
         assert res.status_code == 201
         assert res.json()["roles"] == ["guitarist", "singer", "bassist"]
         assert res.json()["songs"] == {"Oasis - Don't Look Back In Anger": ["guitarist", "singer", "bassist"]}
+
+    def test_preserves_hyphens_inside_song_titles(self, client):
+        res = client.post("/api/members", json={
+            "name": "Carlos",
+            "roles": ["guitarist"],
+            "songs": {"ac/dc - back-in-black": ["guitarist"]},
+        })
+        assert res.status_code == 201
+        assert res.json()["songs"] == {"Ac/Dc - Back-In-Black": ["guitarist"]}
 
     def test_adds_song_roles_to_profile_roles(self, client):
         res = client.post("/api/members", json={
@@ -351,3 +375,11 @@ class TestDatabase:
             assert "members" in tables
             assert "musicians" not in tables
             assert conn.execute("SELECT COUNT(*) FROM members").fetchone()[0] == 1
+
+
+class TestDomainNormalization:
+    def test_normalize_member_name_strips_accents(self):
+        assert normalize_member_name("  maria   joão  ") == "Maria Joao"
+
+    def test_sanitize_song_key_splits_only_on_artist_title_delimiter(self):
+        assert sanitize_song_key("ac/dc - back-in-black") == "Ac/Dc - Back-In-Black"

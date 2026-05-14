@@ -1,6 +1,5 @@
-import re
-import unicodedata
 import uuid
+from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
 
@@ -10,45 +9,33 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import database
+from domain import DomainValidationError, merge_song_roles, normalize_member_name, sanitize_songs, unique_roles
 
-# ── Initialise DB on startup ──────────────────────────────────────────────────
-database.init_db()
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    database.init_db()
+    yield
 
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="JAM Session API",
     description="Who plays what at the jam session.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 class MemberIn(BaseModel):
     name: str
-    colorIdx: int = 0
+    colorIdx: int = Field(default=0, ge=0, le=5)
     roles: list[str]
     songs: dict[str, list[str]] = Field(default_factory=dict)
 
 
-VALID_ROLE_IDS = {
-    "singer",
-    "guitarist",
-    "bassist",
-    "drummer",
-    "keys",
-    "harmonica",
-    "violinist",
-    "flutist",
-    "ukulele",
-    "horn",
-    "cello",
-    "saxophone",
-    "percussion",
-    "accordion",
-    "banjo",
-    "synth",
-}
-CUSTOM_ROLE_PREFIX = "other:"
+def http_domain_error(exc: DomainValidationError) -> HTTPException:
+    return HTTPException(status_code=exc.status_code, detail=exc.detail)
 
 
 # ── API routes (must be declared BEFORE the static-file mount) ────────────────
@@ -59,119 +46,10 @@ def get_members():
     return database.get_all()
 
 
-REMOVED_SONG_EDITION_RE = re.compile(
-    r"""
-    \s*
-    (?:
-      [\(\[]\s*
-      (?:
-        (?:\d{2,4}\s+)?(?:digital\s+)?remaster(?:ed)?(?:\s+\d{2,4})?(?:\s+version)?
-        |
-        remaster(?:ed)?\s+version
-      )
-      \s*[\)\]]
-      |
-      [-–—]\s*
-      (?:
-        (?:\d{2,4}\s+)?(?:digital\s+)?remaster(?:ed)?(?:\s+\d{2,4})?(?:\s+version)?
-        |
-        remaster(?:ed)?\s+version
-      )
-    )
-    \s*$
-    """,
-    re.IGNORECASE | re.VERBOSE,
-)
-
-CONTRACTION_RE = re.compile(r"\b([A-Za-z]+)'(S|T|RE|VE|LL|D|M)\b")
-
-
-def title_preserving_contractions(value: str) -> str:
-    titled = value.title()
-    return CONTRACTION_RE.sub(lambda match: f"{match.group(1)}'{match.group(2).lower()}", titled)
-
-
-def remove_song_edition_suffix(value: str) -> str:
-    previous = value.strip()
-    while True:
-        normalized = REMOVED_SONG_EDITION_RE.sub("", previous).strip()
-        if normalized == previous:
-            return normalized
-        previous = normalized
-
-
-def sanitize_song_key(key: str) -> str:
-    """Sanitize 'Artist - Title' or 'Title' and remove remaster-only editions."""
-    normalized_key = remove_song_edition_suffix(key)
-    parts = []
-    for part in normalized_key.split("-"):
-        normalized_part = title_preserving_contractions(remove_song_edition_suffix(part))
-        if normalized_part:
-            parts.append(normalized_part)
-    return " - ".join(parts)
-
-
-def title_case_name(name: str) -> str:
-    """Normalize names in members for consistent display and duplicate checks."""
-    ascii_name = "".join(c for c in unicodedata.normalize("NFKD", name) if not unicodedata.combining(c))
-    return " ".join(part.title() for part in ascii_name.strip().split())
-
-
-def normalize_role_id(role_id: str) -> str:
-    role_id = role_id.strip()
-    if role_id in VALID_ROLE_IDS:
-        return role_id
-    if role_id == "other":
-        raise HTTPException(status_code=400, detail="Other instrument name is required")
-    if role_id.lower().startswith(CUSTOM_ROLE_PREFIX):
-        label = title_case_name(role_id[len(CUSTOM_ROLE_PREFIX):])
-        if not label:
-            raise HTTPException(status_code=400, detail="Other instrument name is required")
-        return f"{CUSTOM_ROLE_PREFIX}{label}"
-    raise HTTPException(status_code=400, detail=f"Unknown role: {role_id}")
-
-
-def unique_roles(role_ids: list[str]) -> list[str]:
-    """Validate and de-duplicate role IDs while preserving the user's order."""
-    roles: list[str] = []
-    for role_id in role_ids:
-        normalized_role_id = normalize_role_id(role_id)
-        if normalized_role_id not in roles:
-            roles.append(normalized_role_id)
-    return roles
-
-
-def sanitize_songs(songs: dict[str, list[str]]) -> dict[str, list[str]]:
-    sanitized: dict[str, list[str]] = {}
-    for raw_title, role_ids in songs.items():
-        title = sanitize_song_key(raw_title)
-        if not title:
-            raise HTTPException(status_code=400, detail="Song title is required")
-        if not role_ids:
-            raise HTTPException(status_code=400, detail=f"At least one instrument is required for '{title}'")
-
-        roles = unique_roles(role_ids)
-        if title not in sanitized:
-            sanitized[title] = []
-        for role_id in roles:
-            if role_id not in sanitized[title]:
-                sanitized[title].append(role_id)
-
-    return sanitized
-
-
-def merge_song_roles(profile_roles: list[str], songs: dict[str, list[str]]) -> list[str]:
-    roles = list(profile_roles)
-    for song_roles in songs.values():
-        for role_id in song_roles:
-            if role_id not in roles:
-                roles.append(role_id)
-    return roles
-
 @app.post("/api/members", status_code=201, summary="Add a profile to members")
 def create_member(data: MemberIn):
     """Register a profile in members."""
-    name = title_case_name(data.name)
+    name = normalize_member_name(data.name)
     if not name:
         raise HTTPException(status_code=400, detail="Name is required")
     if not data.roles:
@@ -180,8 +58,11 @@ def create_member(data: MemberIn):
     if database.name_exists(name):
         raise HTTPException(status_code=409, detail=f'"{name}" is already in the session')
 
-    roles = unique_roles(data.roles)
-    sanitized_songs = sanitize_songs(data.songs)
+    try:
+        roles = unique_roles(data.roles)
+        sanitized_songs = sanitize_songs(data.songs)
+    except DomainValidationError as exc:
+        raise http_domain_error(exc) from exc
     roles = merge_song_roles(roles, sanitized_songs)
 
     member = {
@@ -201,7 +82,7 @@ def update_member(member_id: str, data: MemberIn):
     if not database.get_by_id(member_id):
         raise HTTPException(status_code=404, detail="Member not found")
 
-    name = title_case_name(data.name)
+    name = normalize_member_name(data.name)
     if not name:
         raise HTTPException(status_code=400, detail="Name is required")
     if not data.roles:
@@ -209,8 +90,11 @@ def update_member(member_id: str, data: MemberIn):
     if database.name_exists(name, exclude_id=member_id):
         raise HTTPException(status_code=409, detail=f'"{name}" is already in the session')
 
-    roles = unique_roles(data.roles)
-    sanitized_songs = sanitize_songs(data.songs)
+    try:
+        roles = unique_roles(data.roles)
+        sanitized_songs = sanitize_songs(data.songs)
+    except DomainValidationError as exc:
+        raise http_domain_error(exc) from exc
     roles = merge_song_roles(roles, sanitized_songs)
 
     return database.update(member_id, {

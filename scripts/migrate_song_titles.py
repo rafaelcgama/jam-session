@@ -1,75 +1,21 @@
 #!/usr/bin/env python3
 import json
-import re
 import sqlite3
 import sys
 from pathlib import Path
 
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT_DIR))
+
+from domain import merge_roles, sanitize_song_key
+
 TABLE_NAME = "members"
-
-REMOVED_SONG_EDITION_RE = re.compile(
-    r"""
-    \s*
-    (?:
-      [\(\[]\s*
-      (?:
-        (?:\d{2,4}\s+)?(?:digital\s+)?remaster(?:ed)?(?:\s+\d{2,4})?(?:\s+version)?
-        |
-        remaster(?:ed)?\s+version
-      )
-      \s*[\)\]]
-      |
-      [-–—]\s*
-      (?:
-        (?:\d{2,4}\s+)?(?:digital\s+)?remaster(?:ed)?(?:\s+\d{2,4})?(?:\s+version)?
-        |
-        remaster(?:ed)?\s+version
-      )
-    )
-    \s*$
-    """,
-    re.IGNORECASE | re.VERBOSE,
-)
-
-CONTRACTION_RE = re.compile(r"\b([A-Za-z]+)'(S|T|RE|VE|LL|D|M)\b")
-
-
-def title_preserving_contractions(value: str) -> str:
-    titled = value.title()
-    return CONTRACTION_RE.sub(lambda match: f"{match.group(1)}'{match.group(2).lower()}", titled)
-
-
-def remove_song_edition_suffix(value: str) -> str:
-    previous = value.strip()
-    while True:
-        normalized = REMOVED_SONG_EDITION_RE.sub("", previous).strip()
-        if normalized == previous:
-            return normalized
-        previous = normalized
-
-
-def normalize_song_key(key: str) -> str:
-    normalized_key = remove_song_edition_suffix(key)
-    parts = []
-    for part in normalized_key.split("-"):
-        normalized_part = title_preserving_contractions(remove_song_edition_suffix(part))
-        if normalized_part:
-            parts.append(normalized_part)
-    return " - ".join(parts)
-
-
-def merge_roles(existing: list[str], incoming: list[str]) -> list[str]:
-    merged = list(existing)
-    for role_id in incoming:
-        if role_id not in merged:
-            merged.append(role_id)
-    return merged
 
 
 def normalize_songs(songs: dict[str, list[str]]) -> dict[str, list[str]]:
     normalized: dict[str, list[str]] = {}
     for title, roles in songs.items():
-        normalized_title = normalize_song_key(title)
+        normalized_title = sanitize_song_key(title)
         if not normalized_title:
             continue
         normalized[normalized_title] = merge_roles(normalized.get(normalized_title, []), roles)

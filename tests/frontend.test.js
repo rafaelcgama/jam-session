@@ -34,6 +34,32 @@ test('normalizes remastered song editions before saving', () => {
   );
 });
 
+test('keeps hyphens inside song titles when normalizing', () => {
+  assert.equal(app.normalizeSongKey('ac/dc - back-in-black'), 'Ac/Dc - Back-In-Black');
+});
+
+test('rejects delimiter-only song titles during normalization', () => {
+  assert.equal(app.normalizeSongKey(' - '), '');
+});
+
+test('surfaces API detail messages from failed requests', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: false,
+    headers: { get: () => 'application/json' },
+    json: async () => ({ detail: 'Other instrument name is required' }),
+  });
+
+  try {
+    await assert.rejects(
+      () => app.apiFetch('/api/members'),
+      /Other instrument name is required/
+    );
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('keeps Other as the final instrument with the clef icon', () => {
   const other = app.ROLES.at(-1);
   assert.equal(other.id, 'other');

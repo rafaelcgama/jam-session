@@ -42,7 +42,9 @@ let state = {
   pendingSongTitle: '',
   pendingSongRoles: [],
   pendingOtherInstrument: '',
+  otherDropdownOpen: false,
 };
+let modalBackStack = [];
 
 // ===== API HELPERS =====
 async function apiFetch(url, options = {}) {
@@ -50,8 +52,11 @@ async function apiFetch(url, options = {}) {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
+  const contentType = res.headers.get('content-type') || '';
+  const data = contentType.includes('application/json')
+    ? await res.json()
+    : { detail: await res.text() };
+  if (!res.ok) throw new Error(data.detail || data.error || 'Request failed');
   return data;
 }
 
@@ -115,9 +120,21 @@ function removeSongEditionSuffix(value) {
   }
 }
 
+function splitSongKey(value) {
+  const text = String(value ?? '');
+  const match = text.match(/\s+-\s+/);
+  if (!match) return [text];
+  const index = match.index;
+  return [
+    text.slice(0, index),
+    text.slice(index + match[0].length),
+  ];
+}
+
 function normalizeSongKey(value) {
-  return removeSongEditionSuffix(value)
-    .split('-')
+  const normalizedKey = removeSongEditionSuffix(value);
+  if (!normalizedKey.replace(/[-–—\s]/g, '')) return '';
+  return splitSongKey(normalizedKey)
     .map(part => titlePreservingContractions(removeSongEditionSuffix(part)))
     .filter(Boolean)
     .join(' - ');
@@ -256,9 +273,22 @@ function renderMembers() {
   grid.innerHTML = list.map(m => renderCard(m)).join('');
 
   grid.querySelectorAll('.member-card').forEach(card => {
+    const openCardProfile = () => {
+      openViewModal(card.dataset.id, {
+        historyTarget: { type: 'closeModal' },
+      });
+    };
+
+    card.addEventListener('click', openCardProfile);
+    card.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openCardProfile();
+      }
+    });
     card.querySelector('.btn-view').addEventListener('click', e => {
       e.stopPropagation();
-      openViewModal(card.dataset.id);
+      openCardProfile();
     });
     card.querySelector('.btn-edit').addEventListener('click', e => {
       e.stopPropagation();
@@ -358,12 +388,16 @@ function renderSongbook() {
   container.querySelectorAll('.song-row').forEach(row => {
     row.addEventListener('click', () => {
       const title = decodeDataValue(row.dataset.song);
-      openInstantBandModal(title, book[title]);
+      openInstantBandModal(title, book[title], {
+        historyTarget: { type: 'closeModal' },
+      });
     });
   });
 }
 
-function openInstantBandModal(title, roleMap) {
+function openInstantBandModal(title, roleMap, options = {}) {
+  if (options.historyTarget) pushModalHistory(options.historyTarget);
+
   const safeTitle = escapeHtml(title);
   const sectionsHtml = getOrderedRoleIds(roleMap).map(rid => {
     const role = getRole(rid);
@@ -410,7 +444,9 @@ function openInstantBandModal(title, roleMap) {
   document.querySelectorAll('.clickable-member').forEach(el => {
     el.addEventListener('click', () => {
       const mName = decodeDataValue(el.dataset.member);
-      openMemberProfileByName(mName);
+      openMemberProfileByName(mName, {
+        backTarget: { type: 'instantBand', title, roleMap },
+      });
     });
   });
   
@@ -506,12 +542,16 @@ function renderBandbook() {
   container.querySelectorAll('.song-row').forEach(row => {
     row.addEventListener('click', () => {
       const bandName = decodeDataValue(row.dataset.band);
-      openBandModal(bandName, bandbook[bandName]);
+      openBandModal(bandName, bandbook[bandName], {
+        historyTarget: { type: 'closeModal' },
+      });
     });
   });
 }
 
-function openBandModal(bandName, songsMap) {
+function openBandModal(bandName, songsMap, options = {}) {
+  if (options.historyTarget) pushModalHistory(options.historyTarget);
+
   const safeBandName = escapeHtml(bandName);
   const songsHtml = Object.keys(songsMap).sort((a, b) => a.localeCompare(b)).map(songName => {
     const roleMap = songsMap[songName];
@@ -560,7 +600,9 @@ function openBandModal(bandName, songsMap) {
     el.addEventListener('click', () => {
       const sName = decodeDataValue(el.dataset.song);
       const fullTitle = bandName === "Originals / Unknown" ? sName : bandName + " - " + sName;
-      openInstantBandModal(fullTitle, songsMap[sName]);
+      openInstantBandModal(fullTitle, songsMap[sName], {
+        historyTarget: { type: 'band', bandName, songsMap },
+      });
     });
   });
   
@@ -606,7 +648,7 @@ function renderCard(m) {
 
   return `
     <div class="member-card" data-id="${escapeAttr(m.id)}" data-name="${escapeAttr(m.name)}"
-         style="--accent-color:${accentColor}22">
+         style="--accent-color:${accentColor}22" role="button" tabindex="0" aria-label="View ${escapeAttr(m.name)} profile">
       <div class="card-header">
         <div class="avatar" style="background:${accentColor}22;color:${accentColor}">
           ${escapeHtml(getInitials(m.name))}
@@ -643,13 +685,13 @@ function renderFilterChips() {
       }
 
       const dropdownHtml = (isActive && state.otherDropdownOpen && customOptions.length > 0) ? `
-        <div class="other-dropdown-menu" style="position:absolute; top:calc(100% + 0.5rem); left:0; z-index:100; background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; box-shadow:0 10px 25px rgba(0,0,0,0.8); padding:0.4rem; display:flex; flex-direction:column; gap:0.3rem; min-width:150px; text-align:left">
-          <button class="chip custom-filter-chip ${state.customFilter === 'all' ? 'active' : ''}" type="button" data-custom-filter="all" style="width:100%; justify-content:flex-start; margin:0; background:transparent; border:none; box-shadow:none; padding:0.4rem 0.6rem">
+        <div class="other-dropdown-menu">
+          <button class="chip custom-filter-chip ${state.customFilter === 'all' ? 'active' : ''}" type="button" data-custom-filter="all">
             🎼 All Other
           </button>
           ${customOptions.map(rid => {
             const role = getRole(rid);
-            return `<button class="chip custom-filter-chip ${state.customFilter === rid ? 'active' : ''}" type="button" data-custom-filter="${encodeDataValue(rid)}" style="width:100%; justify-content:flex-start; margin:0; background:transparent; border:none; box-shadow:none; padding:0.4rem 0.6rem">
+            return `<button class="chip custom-filter-chip ${state.customFilter === rid ? 'active' : ''}" type="button" data-custom-filter="${encodeDataValue(rid)}">
               ${role.icon} ${escapeHtml(role.label)}
             </button>`;
           }).join('')}
@@ -657,7 +699,7 @@ function renderFilterChips() {
       ` : '';
 
       return `
-        <div style="position:relative; display:inline-block">
+        <div class="other-filter-wrap">
           <button class="chip filter-chip ${isActive ? 'active' : ''}" type="button" data-filter="other">
             <span class="chip-icon">${r.icon}</span>${escapeHtml(label)}
           </button>
@@ -703,9 +745,10 @@ function renderFilterChips() {
 }
 
 // ===== VIEW MODAL =====
-function openViewModal(id) {
+function openViewModal(id, options = {}) {
   const m = members.find(x => x.id === id);
   if (!m) return;
+  if (options.historyTarget) pushModalHistory(options.historyTarget);
   const accentColor = getRole(m.roles[0])?.color || '#5b8cff';
   const safeName = escapeHtml(m.name);
 
@@ -762,9 +805,10 @@ function openViewModal(id) {
   openModal();
 }
 
-function openMemberProfileByName(name) {
+function openMemberProfileByName(name, options = {}) {
   const member = members.find(m => normaliseSearch(m.name) === normaliseSearch(name));
   if (!member) return;
+  if (options.backTarget) pushModalHistory(options.backTarget);
   openViewModal(member.id);
 }
 
@@ -776,7 +820,7 @@ function openAddModal() {
   state.pendingSongTitle = '';
   state.pendingSongRoles = [];
   state.pendingOtherInstrument = '';
-  renderEditModal('Add Members 🎼');
+  renderEditModal('Add Member 🎼');
 }
 
 function openEditModal(id) {
@@ -1115,12 +1159,6 @@ function renderSongsEditor() {
       }, 400); // 400ms debounce
     });
     
-    // Close dropdown on click outside
-    document.addEventListener('click', e => {
-      if (!input.contains(e.target) && !dropdown.contains(e.target)) {
-        dropdown.classList.add('hidden');
-      }
-    });
   }
 }
 
@@ -1245,10 +1283,35 @@ function openModal() {
   document.body.style.overflow = 'hidden';
 }
 
-function closeModal() {
+function closeModal({ clearHistory = true } = {}) {
   document.getElementById('modal-overlay').classList.remove('open');
   document.body.style.overflow = '';
   state.editingId = null;
+  if (clearHistory) modalBackStack = [];
+}
+
+function pushModalHistory(backTarget) {
+  if (typeof window === 'undefined' || !window.history?.pushState) return;
+  modalBackStack.push(backTarget);
+  window.history.pushState({ jamSessionModal: true }, '', window.location.href);
+}
+
+function restorePreviousModal() {
+  const backTarget = modalBackStack.pop();
+  if (!backTarget) return false;
+  if (backTarget.type === 'closeModal') {
+    closeModal({ clearHistory: false });
+    return true;
+  }
+  if (backTarget.type === 'band') {
+    openBandModal(backTarget.bandName, backTarget.songsMap);
+    return true;
+  }
+  if (backTarget.type === 'instantBand') {
+    openInstantBandModal(backTarget.title, backTarget.roleMap);
+    return true;
+  }
+  return false;
 }
 
 // ===== TOAST =====
@@ -1278,6 +1341,20 @@ function formatSongTitle(rawTitle) {
   `;
 }
 
+function handleDocumentClick(e) {
+  const target = e.target;
+  const input = document.getElementById('song-input-new');
+  const dropdown = document.getElementById('autocomplete-dropdown');
+  if (input && dropdown && !input.contains(target) && !dropdown.contains(target)) {
+    dropdown.classList.add('hidden');
+  }
+
+  if (state.otherDropdownOpen && !target.closest?.('.other-filter-wrap')) {
+    state.otherDropdownOpen = false;
+    renderFilterChips();
+  }
+}
+
 // ===== INIT =====
 async function init() {
   renderFilterChips();
@@ -1294,10 +1371,15 @@ async function init() {
   });
 
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+  document.addEventListener('click', handleDocumentClick);
+  window.addEventListener('popstate', () => {
+    if (!restorePreviousModal()) closeModal({ clearHistory: false });
+  });
 
   // ── View toggle ─────────────────────────────────────────────────────────────
   function switchView(view) {
     state.view = view;
+    state.otherDropdownOpen = false;
     const membersGrid  = document.getElementById('members-grid');
     const songbookGrid = document.getElementById('songbook-grid');
     const bandbookGrid = document.getElementById('bandbook-grid');
@@ -1350,6 +1432,7 @@ async function init() {
     state.search = '';
     state.filter = 'all';
     state.customFilter = 'all';
+    state.otherDropdownOpen = false;
     document.getElementById('search-input').value = '';
     renderFilterChips();
     switchView('members');
@@ -1375,6 +1458,7 @@ if (typeof document !== 'undefined') {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
+    apiFetch,
     buildBandbookFrom,
     buildSongbookFrom,
     buildSelectedSongRoles,
