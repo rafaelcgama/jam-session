@@ -893,7 +893,6 @@ function renderEditModal(title) {
     </div>
 
     <div class="form-group" id="songs-section">
-      <label class="form-label">Songs</label>
       <div class="songs-editor" id="songs-editor"></div>
     </div>
 
@@ -1036,19 +1035,12 @@ function renderSongsEditor() {
       </div>
     </div>` : '';
 
-  let html = `<div class="song-add-row">
-    <div class="song-add-input-wrap">
-      <input class="form-input" id="song-input-new" type="text" placeholder="Search and select a song..." autocomplete="off" style="width:100%" />
-      <div id="autocomplete-dropdown" class="autocomplete-dropdown hidden"></div>
-    </div>
-  </div>
-  ${selectedSongHtml}
-  ${pendingRolesHtml}`;
-  
+  let html = `<label class="form-label">Songs</label>`;
+
   if (songs.length === 0) {
-    html += `<div class="no-songs" style="text-align:center;padding:1rem 0;color:var(--text-muted)">No songs added yet.</div>`;
+    html += `<div class="no-songs" style="text-align:center;padding:1rem 0;color:var(--text-muted);background:var(--bg-tertiary);border-radius:6px;margin-bottom:1.5rem">No songs added yet.</div>`;
   } else {
-    html += `<div class="songs-editor-list" style="display:flex;flex-direction:column;gap:0.5rem">`;
+    html += `<div class="songs-editor-list" style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:1.5rem">`;
     songs.forEach(title => {
       const rids = state.editSongs[title] || [];
       const encodedTitle = encodeDataValue(title);
@@ -1080,7 +1072,19 @@ function renderSongsEditor() {
     });
     html += `</div>`;
   }
-  
+
+  html += `
+    <label class="form-label">Add New Song</label>
+    <div class="song-add-row">
+      <div class="song-add-input-wrap">
+        <input class="form-input" id="song-input-new" type="text" placeholder="Search for a song..." autocomplete="off" style="width:100%" />
+        <div id="autocomplete-dropdown" class="autocomplete-dropdown hidden"></div>
+      </div>
+    </div>
+    ${selectedSongHtml}
+    ${pendingRolesHtml}
+  `;
+
   editor.innerHTML = html;
 
   const newInputEl = document.getElementById('song-input-new');
