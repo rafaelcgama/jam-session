@@ -943,6 +943,9 @@ function renderSongsEditor() {
           <input id="pending-other-instrument-input" class="form-input" type="text" placeholder="Type the instrument..." autocomplete="off" style="flex:1" value="${escapeAttr(state.pendingOtherInstrument)}" />
           <button type="button" class="btn btn-secondary" id="btn-add-pending-other-instrument" style="white-space:nowrap">+ Add Instrument</button>
         </div>` : ''}
+      <div style="margin-top:0.5rem;display:flex;justify-content:flex-end">
+        <button class="btn btn-secondary" id="btn-add-song-new" style="white-space:nowrap">+ Add Song</button>
+      </div>
     </div>` : '';
 
   let html = `<div class="song-add-row">
@@ -950,7 +953,6 @@ function renderSongsEditor() {
       <input class="form-input" id="song-input-new" type="text" placeholder="Search and select a song..." autocomplete="off" style="width:100%" />
       <div id="autocomplete-dropdown" class="autocomplete-dropdown hidden"></div>
     </div>
-    <button class="btn btn-secondary" id="btn-add-song-new" style="white-space:nowrap">+ Add Song</button>
   </div>
   ${selectedSongHtml}
   ${pendingRolesHtml}`;
