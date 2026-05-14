@@ -307,25 +307,21 @@ function renderMembers() {
         openCardProfile();
       }
     });
-    card.querySelector('.btn-view').addEventListener('click', e => {
-      e.stopPropagation();
+    const stopPrag = e => e.stopPropagation();
+    ['click', 'pointerdown', 'touchstart'].forEach(eventType => {
+      card.querySelector('.btn-view').addEventListener(eventType, stopPrag);
+      card.querySelector('.btn-edit').addEventListener(eventType, stopPrag);
+      card.querySelector('.btn-del').addEventListener(eventType, stopPrag);
+    });
+
+    card.querySelector('.btn-view').addEventListener('click', () => {
       openCardProfile();
     });
-    card.querySelector('.btn-edit').addEventListener('click', e => {
-      e.stopPropagation();
+    card.querySelector('.btn-edit').addEventListener('click', () => {
       openEditModal(card.dataset.id);
     });
-    card.querySelector('.btn-del').addEventListener('click', async e => {
-      e.stopPropagation();
-      if (!confirm(`Remove ${card.dataset.name} from the session?`)) return;
-      try {
-        await apiFetch(`${API}/${card.dataset.id}`, { method: 'DELETE' });
-        members = members.filter(m => m.id !== card.dataset.id);
-        renderMembers();
-        toast('Removed from members', 'success');
-      } catch (err) {
-        toast(err.message, 'error');
-      }
+    card.querySelector('.btn-del').addEventListener('click', () => {
+      openDeleteModal(card.dataset.id, card.dataset.name);
     });
   });
 }
@@ -856,6 +852,44 @@ function openMemberProfileByName(name, options = {}) {
   openViewModal(member.id);
 }
 
+// ===== DELETE MODAL =====
+function openDeleteModal(id, name) {
+  setModalContent(`
+    <div class="modal-header">
+      <div class="modal-title">Remove Member</div>
+      <button class="modal-close" id="modal-close-btn">✕</button>
+    </div>
+    <div style="padding:1rem 0;color:var(--text-secondary)">
+      Are you sure you want to remove <strong>${escapeHtml(name)}</strong> from the session?
+    </div>
+    <div class="form-actions" style="margin-top:1.5rem">
+      <button class="btn btn-secondary" id="modal-cancel-btn">Cancel</button>
+      <button class="btn btn-danger" id="modal-confirm-del-btn">Remove</button>
+    </div>
+  `);
+
+  document.getElementById('modal-close-btn').addEventListener('click', () => closeModal());
+  document.getElementById('modal-cancel-btn').addEventListener('click', () => closeModal());
+  document.getElementById('modal-confirm-del-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('modal-confirm-del-btn');
+    btn.disabled = true;
+    btn.textContent = 'Removing...';
+    try {
+      await apiFetch(`${API}/${id}`, { method: 'DELETE' });
+      members = members.filter(m => m.id !== id);
+      closeModal();
+      renderMembers();
+      toast('Removed from members', 'success');
+    } catch (err) {
+      toast(err.message, 'error');
+      btn.disabled = false;
+      btn.textContent = 'Remove';
+    }
+  });
+
+  openModal();
+}
+
 // ===== ADD / EDIT MODAL =====
 function openAddModal() {
   state.editingId = null;
@@ -1246,6 +1280,14 @@ async function saveEdit() {
   const nameInput = document.getElementById('edit-name');
   const name = nameInput.value.trim();
   if (!name) { nameInput.focus(); toast('Please enter your name', 'error'); return; }
+
+  const normalizedInputName = normaliseSearch(name);
+  const nameExists = members.some(m => m.id !== state.editingId && normaliseSearch(m.name) === normalizedInputName);
+  if (nameExists) {
+    nameInput.focus();
+    toast(`"${name}" is already registered in the session`, 'error');
+    return;
+  }
 
   if (state.pendingSongTitle) {
     addSongFromInput();
