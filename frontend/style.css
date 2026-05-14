@@ -261,6 +261,18 @@ main {
   color: var(--neon-blue);
 }
 .chip-icon { font-size: 0.9rem; }
+.custom-filter-row {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: -0.25rem;
+  padding-left: 0.35rem;
+}
+.custom-filter-row .chip {
+  background: rgba(91,140,255,0.08);
+  border-style: dashed;
+}
 
 /* ===== MEMBERS GRID ===== */
 .members-grid {

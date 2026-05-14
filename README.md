@@ -14,8 +14,9 @@ A lightweight web app for jam session members to register their name, instrument
 - Songbook tab that groups all registered songs and shows who can play each instrument
 - Bandbook tab that groups songs by artist/band from `Artist - Song` titles
 - Instant Band breakdowns for a song, with clickable badges for members that open profiles without leaving Songbook or Bandbook
-- iTunes-powered song autocomplete when adding repertoire, while still allowing custom titles
+- Apple Music song autocomplete when adding repertoire; songs are selected from listed results for consistent grouping
 - Song-first data model: add a song once, assign multiple instruments to it
+- `Other` instrument option with a custom instrument name field and the shared clef icon
 - Server-side validation for duplicate names, unknown instruments, blank song titles, and songs without instruments
 - Safer frontend rendering for user-provided names, band names, and song titles
 - Fully responsive and mobile-friendly
@@ -143,6 +144,7 @@ All endpoints are prefixed with `/api`.
 
 - `name` is required and must be unique case-insensitively.
 - `roles` must include at least one known instrument.
+- Custom instruments are stored as `other:Instrument Name` and display with the clef icon.
 - Song titles must contain visible text after sanitization.
 - Remaster-only song suffixes like `(Remastered)` and `- 2014 Remaster` are removed so Songbook grouping stays clean.
 - Every song must include at least one known instrument.

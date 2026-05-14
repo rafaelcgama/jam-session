@@ -34,6 +34,64 @@ test('normalizes remastered song editions before saving', () => {
   );
 });
 
+test('keeps Other as the final instrument with the clef icon', () => {
+  const other = app.ROLES.at(-1);
+  assert.equal(other.id, 'other');
+  assert.equal(other.label, 'Other');
+  assert.equal(other.icon, '🎼');
+});
+
+test('builds and displays custom Other instruments with the clef icon', () => {
+  const roleId = app.makeCustomRoleId('  berimbau  ');
+  assert.equal(roleId, 'other:Berimbau');
+  assert.deepEqual(app.getRole(roleId), {
+    id: 'other:Berimbau',
+    label: 'Berimbau',
+    icon: '🎼',
+    color: '#8fa3ff',
+  });
+});
+
+test('matches custom instruments when filtering by Other', () => {
+  assert.equal(app.memberMatchesRoleFilter({ roles: ['other:Berimbau'] }, 'other'), true);
+  assert.equal(app.memberMatchesRoleFilter({ roles: ['guitarist'] }, 'other'), false);
+  assert.equal(app.memberMatchesRoleFilter({ roles: ['other:Cavaco'] }, 'other', 'other:Cavaco'), true);
+  assert.equal(app.memberMatchesRoleFilter({ roles: ['other:Berimbau'] }, 'other', 'other:Cavaco'), false);
+});
+
+test('collects custom instrument filter options from roles and songs', () => {
+  const members = [
+    {
+      roles: ['other:Cavaco'],
+      songs: { 'Marcos Carnaval & Filipe Guerra - Cavaco': ['singer'] },
+    },
+    {
+      roles: ['singer'],
+      songs: { 'Original Jam': ['other:Berimbau'] },
+    },
+  ];
+
+  assert.deepEqual(app.getCustomRoleOptions(members), ['other:Berimbau', 'other:Cavaco']);
+});
+
+test('collects multiple custom instruments for one pending song', () => {
+  assert.deepEqual(
+    app.buildSelectedSongRoles(['other', 'other:Berimbau'], 'kazoo'),
+    ['other:Berimbau', 'other:Kazoo']
+  );
+});
+
+test('orders custom song instruments after standard instruments', () => {
+  assert.deepEqual(
+    app.getOrderedRoleIds({
+      'other:Berimbau': ['Ana'],
+      singer: ['Ben'],
+      guitarist: ['Cara'],
+    }),
+    ['singer', 'guitarist', 'other:Berimbau']
+  );
+});
+
 test('builds songbook rows and filters by member name', () => {
   const members = [
     {
@@ -57,6 +115,21 @@ test('builds songbook rows and filters by member name', () => {
   });
   assert.deepEqual(app.buildSongbookFrom(members, 'creep'), {
     'Radiohead - Creep': { singer: ['Ana'], guitarist: ['Ben'] },
+  });
+});
+
+test('builds songbook rows with custom Other instruments', () => {
+  const members = [
+    {
+      name: 'Ana',
+      songs: {
+        'Original Jam': ['other:Berimbau'],
+      },
+    },
+  ];
+
+  assert.deepEqual(app.buildSongbookFrom(members), {
+    'Original Jam': { 'other:Berimbau': ['Ana'] },
   });
 });
 

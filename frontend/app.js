@@ -16,6 +16,7 @@ const ROLES = [
   { id: 'accordion',  label: 'Accordion',  icon: '🪗', color: '#d90429' },
   { id: 'banjo',      label: 'Banjo',      icon: '🪕', color: '#ffb703' },
   { id: 'synth',      label: 'Synth/DJ',   icon: '🎛️', color: '#00f5d4' },
+  { id: 'other',      label: 'Other',      icon: '🎼', color: '#8fa3ff' },
 ];
 
 const ROLE_MAP = Object.fromEntries(ROLES.map(r => [r.id, r]));
@@ -32,11 +33,15 @@ let members = [];   // in-memory cache from server
 let state = {
   view:      'members',  // 'members' | 'songbook'
   filter:    'all',
+  customFilter: 'all',
   search:    '',
   modalMode: null,
   editingId: null,
   editRoles: [],
   editSongs: {},
+  pendingSongTitle: '',
+  pendingSongRoles: [],
+  pendingOtherInstrument: '',
 };
 
 // ===== API HELPERS =====
@@ -114,6 +119,86 @@ function normalizeSongKey(value) {
     .join(' - ');
 }
 
+const CUSTOM_ROLE_PREFIX = 'other:';
+
+function normalizeInstrumentName(value) {
+  return String(value ?? '')
+    .trim()
+    .split(/\s+/)
+    .map(titlePreservingContractions)
+    .join(' ');
+}
+
+function makeCustomRoleId(value) {
+  const label = normalizeInstrumentName(value);
+  return label ? `${CUSTOM_ROLE_PREFIX}${label}` : '';
+}
+
+function isCustomRole(roleId) {
+  return String(roleId ?? '').startsWith(CUSTOM_ROLE_PREFIX);
+}
+
+function getRole(roleId) {
+  if (ROLE_MAP[roleId]) return ROLE_MAP[roleId];
+  if (isCustomRole(roleId)) {
+    const label = roleId.slice(CUSTOM_ROLE_PREFIX.length);
+    return { id: roleId, label, icon: '🎼', color: ROLE_MAP.other.color };
+  }
+  return null;
+}
+
+function getOrderedRoleIds(roleMap) {
+  const ids = Object.keys(roleMap);
+  const standardIds = ROLES
+    .map(role => role.id)
+    .filter(id => id !== 'other' && ids.includes(id));
+  const customIds = ids
+    .filter(isCustomRole)
+    .sort((a, b) => getRole(a).label.localeCompare(getRole(b).label));
+  const fallbackIds = ids.includes('other') ? ['other'] : [];
+  const unknownIds = ids
+    .filter(id => !standardIds.includes(id) && !customIds.includes(id) && id !== 'other')
+    .sort((a, b) => a.localeCompare(b));
+  return [...standardIds, ...customIds, ...fallbackIds, ...unknownIds];
+}
+
+function getCustomRoleOptions(sourceMembers = members) {
+  const ids = new Set();
+  for (const member of sourceMembers) {
+    for (const rid of member.roles || []) {
+      if (isCustomRole(rid)) ids.add(rid);
+    }
+    for (const rids of Object.values(member.songs || {})) {
+      for (const rid of rids || []) {
+        if (isCustomRole(rid)) ids.add(rid);
+      }
+    }
+  }
+  return Array.from(ids)
+    .sort((a, b) => getRole(a).label.localeCompare(getRole(b).label));
+}
+
+function memberMatchesRoleFilter(member, filter, customFilter = 'all') {
+  if (filter === 'all') return true;
+  if (filter === 'other') {
+    if (customFilter !== 'all') return member.roles.includes(customFilter);
+    return member.roles.some(isCustomRole) || member.roles.includes('other');
+  }
+  return member.roles.includes(filter);
+}
+
+function buildSelectedSongRoles(pendingRoles, pendingOtherInstrument) {
+  const selected = [];
+  for (const rid of pendingRoles) {
+    if (rid !== 'other' && !selected.includes(rid)) selected.push(rid);
+  }
+
+  const customRole = makeCustomRoleId(pendingOtherInstrument);
+  if (customRole && !selected.includes(customRole)) selected.push(customRole);
+
+  return selected;
+}
+
 // ===== FILTER =====
 function getFilteredMembers() {
   let list = members;
@@ -125,7 +210,7 @@ function getFilteredMembers() {
     });
   }
   if (state.filter !== 'all') {
-    list = list.filter(m => m.roles.includes(state.filter));
+    list = list.filter(m => memberMatchesRoleFilter(m, state.filter, state.customFilter));
   }
   return list;
 }
@@ -243,16 +328,16 @@ function renderSongbook() {
 
   container.innerHTML = titles.map(title => {
     const roleMap = book[title]; // { roleId -> [names] }
-    const roleIds = Object.keys(roleMap);
+    const roleIds = getOrderedRoleIds(roleMap);
     const totalPlayers = new Set(Object.values(roleMap).flat()).size;
     const safeTitle = escapeHtml(title);
 
     const iconBadges = roleIds.map(rid => {
-      const role = ROLE_MAP[rid];
+      const role = getRole(rid);
       if (!role) return '';
       return `<span class="song-row-icon-badge"
         style="color:${role.color};border-color:${role.color}55;background:${role.color}14">
-        ${role.icon} ${role.label}
+        ${role.icon} ${escapeHtml(role.label)}
       </span>`;
     }).join('');
 
@@ -276,9 +361,10 @@ function renderSongbook() {
 
 function openInstantBandModal(title, roleMap) {
   const safeTitle = escapeHtml(title);
-  // Build the "Instant Band" breakdown — all ROLES in order, show who can play each
-  const sectionsHtml = ROLES.map(role => {
-    const names = roleMap[role.id] || [];
+  const sectionsHtml = getOrderedRoleIds(roleMap).map(rid => {
+    const role = getRole(rid);
+    if (!role) return '';
+    const names = roleMap[rid] || [];
     const badgesHtml = names.length > 0
       ? names.map(name => `
           <span class="instant-band-badge clickable-member" data-member="${encodeDataValue(name)}"
@@ -290,12 +376,9 @@ function openInstantBandModal(title, roleMap) {
           </span>`).join('')
       : `<span class="instant-band-missing">⚠️ No one registered yet</span>`;
 
-    // Only show roles that are represented OR are missing but someone might fill
-    if (names.length === 0 && !roleMap[role.id]) return '';
-
     return `
       <div class="instant-band-section">
-        <div class="instant-band-label" style="color:${role.color}">${role.icon} ${role.label}</div>
+        <div class="instant-band-label" style="color:${role.color}">${role.icon} ${escapeHtml(role.label)}</div>
         <div class="instant-band-badges">${badgesHtml}</div>
       </div>`;
   }).join('');
@@ -428,16 +511,16 @@ function openBandModal(bandName, songsMap) {
   const safeBandName = escapeHtml(bandName);
   const songsHtml = Object.keys(songsMap).sort((a, b) => a.localeCompare(b)).map(songName => {
     const roleMap = songsMap[songName];
-    const roleIds = Object.keys(roleMap);
+    const roleIds = getOrderedRoleIds(roleMap);
     const safeSongName = escapeHtml(songName);
     
     const iconBadges = roleIds.map(rid => {
-      const role = ROLE_MAP[rid];
+      const role = getRole(rid);
       if (!role) return '';
       const names = roleMap[rid].join(', ');
       return `<span class="song-row-icon-badge" title="${escapeAttr(names)}"
         style="color:${role.color};border-color:${role.color}55;background:${role.color}14">
-        ${role.icon} ${role.label} (${roleMap[rid].length})
+        ${role.icon} ${escapeHtml(role.label)} (${roleMap[rid].length})
       </span>`;
     }).join('');
 
@@ -481,14 +564,14 @@ function openBandModal(bandName, songsMap) {
 }
 
 function renderCard(m) {
-  const accentColor = ROLE_MAP[m.roles[0]]?.color || '#5b8cff';
+  const accentColor = getRole(m.roles[0])?.color || '#5b8cff';
   const safeName = escapeHtml(m.name);
 
   const rolesHtml = m.roles.map(rid => {
-    const role = ROLE_MAP[rid];
+    const role = getRole(rid);
     if (!role) return '';
     return `<span class="role-badge" style="background:${role.color}18;color:${role.color};border:1px solid ${role.color}33">
-      ${role.icon} ${role.label}
+      ${role.icon} ${escapeHtml(role.label)}
     </span>`;
   }).join('');
 
@@ -503,7 +586,7 @@ function renderCard(m) {
     songsHtml = '<div class="songs-list member-song-list">';
     songsHtml += displaySongs.map(title => {
       const rids = m.songs[title] || [];
-      const icons = rids.map(rid => ROLE_MAP[rid]?.icon).filter(Boolean).join(' ');
+      const icons = rids.map(rid => getRole(rid)?.icon).filter(Boolean).join(' ');
       return `<div class="song-item member-song-item">
         <span class="song-title">${formatSongTitle(title)}</span> 
         <span class="song-icons">${icons}</span>
@@ -541,15 +624,74 @@ function renderCard(m) {
 
 function renderFilterChips() {
   const bar = document.getElementById('filter-bar');
-  const all = `<div class="chip ${state.filter === 'all' ? 'active' : ''}" data-filter="all">🎶 All</div>`;
-  const chips = ROLES.map(r => `
-    <div class="chip ${state.filter === r.id ? 'active' : ''}" data-filter="${r.id}">
-      <span class="chip-icon">${r.icon}</span>${r.label}
-    </div>`).join('');
+  const customOptions = getCustomRoleOptions();
+  if (!customOptions.includes(state.customFilter)) {
+    state.customFilter = 'all';
+  }
+
+  const all = `<button class="chip filter-chip ${state.filter === 'all' ? 'active' : ''}" type="button" data-filter="all">🎶 All</button>`;
+  const chips = ROLES.map(r => {
+    if (r.id === 'other') {
+      const isActive = state.filter === 'other';
+      let label = r.label;
+      if (isActive && state.customFilter !== 'all') {
+        label = getRole(state.customFilter)?.label || r.label;
+      }
+
+      const dropdownHtml = (isActive && state.otherDropdownOpen && customOptions.length > 0) ? `
+        <div class="other-dropdown-menu" style="position:absolute; top:calc(100% + 0.5rem); left:0; z-index:100; background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; box-shadow:0 10px 25px rgba(0,0,0,0.8); padding:0.4rem; display:flex; flex-direction:column; gap:0.3rem; min-width:150px; text-align:left">
+          <button class="chip custom-filter-chip ${state.customFilter === 'all' ? 'active' : ''}" type="button" data-custom-filter="all" style="width:100%; justify-content:flex-start; margin:0; background:transparent; border:none; box-shadow:none; padding:0.4rem 0.6rem">
+            🎼 All Other
+          </button>
+          ${customOptions.map(rid => {
+            const role = getRole(rid);
+            return `<button class="chip custom-filter-chip ${state.customFilter === rid ? 'active' : ''}" type="button" data-custom-filter="${encodeDataValue(rid)}" style="width:100%; justify-content:flex-start; margin:0; background:transparent; border:none; box-shadow:none; padding:0.4rem 0.6rem">
+              ${role.icon} ${escapeHtml(role.label)}
+            </button>`;
+          }).join('')}
+        </div>
+      ` : '';
+
+      return `
+        <div style="position:relative; display:inline-block">
+          <button class="chip filter-chip ${isActive ? 'active' : ''}" type="button" data-filter="other">
+            <span class="chip-icon">${r.icon}</span>${escapeHtml(label)}
+          </button>
+          ${dropdownHtml}
+        </div>
+      `;
+    }
+
+    return `
+      <button class="chip filter-chip ${state.filter === r.id ? 'active' : ''}" type="button" data-filter="${r.id}">
+        <span class="chip-icon">${r.icon}</span>${escapeHtml(r.label)}
+      </button>`;
+  }).join('');
+
   bar.innerHTML = all + chips;
-  bar.querySelectorAll('.chip').forEach(c => {
-    c.addEventListener('click', () => {
-      state.filter = c.dataset.filter;
+  bar.querySelectorAll('.filter-chip').forEach(c => {
+    c.addEventListener('click', e => {
+      e.stopPropagation();
+      const newFilter = c.dataset.filter;
+      if (newFilter === 'other') {
+        state.filter = 'other';
+        state.otherDropdownOpen = !state.otherDropdownOpen;
+      } else {
+        state.filter = newFilter;
+        state.customFilter = 'all';
+        state.otherDropdownOpen = false;
+      }
+      renderFilterChips();
+      renderMembers();
+    });
+  });
+  bar.querySelectorAll('.custom-filter-chip').forEach(c => {
+    c.addEventListener('click', e => {
+      e.stopPropagation();
+      state.customFilter = c.dataset.customFilter === 'all'
+        ? 'all'
+        : decodeDataValue(c.dataset.customFilter);
+      state.otherDropdownOpen = false;
       renderFilterChips();
       renderMembers();
     });
@@ -560,7 +702,7 @@ function renderFilterChips() {
 function openViewModal(id) {
   const m = members.find(x => x.id === id);
   if (!m) return;
-  const accentColor = ROLE_MAP[m.roles[0]]?.color || '#5b8cff';
+  const accentColor = getRole(m.roles[0])?.color || '#5b8cff';
   const safeName = escapeHtml(m.name);
 
   const songKeys = Object.keys(m.songs);
@@ -573,9 +715,9 @@ function openViewModal(id) {
     songsHtml += songKeys.map(title => {
       const rids = m.songs[title] || [];
       const roleBadges = rids.map(rid => {
-        const role = ROLE_MAP[rid];
+        const role = getRole(rid);
         if (!role) return '';
-        return `<span class="inline-role-badge" style="color:${role.color};border:1px solid ${role.color}44;background:${role.color}11;padding:0.15rem 0.4rem;border-radius:12px;font-size:0.75rem;font-weight:600;display:inline-flex;align-items:center;gap:0.25rem" title="Instrument">${role.icon} ${role.label}</span>`;
+        return `<span class="inline-role-badge" style="color:${role.color};border:1px solid ${role.color}44;background:${role.color}11;padding:0.15rem 0.4rem;border-radius:12px;font-size:0.75rem;font-weight:600;display:inline-flex;align-items:center;gap:0.25rem" title="Instrument">${role.icon} ${escapeHtml(role.label)}</span>`;
       }).join('');
       return `<div class="detail-song-row" style="background:var(--bg-tertiary);padding:0.75rem;border-radius:6px;display:flex;flex-direction:column;gap:0.4rem">
         <div class="ds-title" style="font-weight:600;font-size:1.05rem;color:var(--text-primary)">${formatSongTitle(title)}</div>
@@ -627,6 +769,9 @@ function openAddModal() {
   state.editingId = null;
   state.editRoles = [];
   state.editSongs = {};
+  state.pendingSongTitle = '';
+  state.pendingSongRoles = [];
+  state.pendingOtherInstrument = '';
   renderEditModal('Add Members 🎼');
 }
 
@@ -636,6 +781,9 @@ function openEditModal(id) {
   state.editingId = id;
   state.editRoles = [...m.roles];
   state.editSongs = JSON.parse(JSON.stringify(m.songs));
+  state.pendingSongTitle = '';
+  state.pendingSongRoles = [];
+  state.pendingOtherInstrument = '';
   renderEditModal(`Edit: ${m.name}`);
   document.getElementById('edit-name').value = m.name;
 }
@@ -652,12 +800,7 @@ function renderEditModal(title) {
       <input id="edit-name" class="form-input" type="text" placeholder="e.g. Carlos" autocomplete="off" />
     </div>
 
-    <div class="form-group">
-      <label class="form-label">Instruments</label>
-      <div class="roles-grid" id="roles-grid"></div>
-    </div>
-
-    <div class="form-group" id="songs-section" style="display:none">
+    <div class="form-group" id="songs-section">
       <label class="form-label">Songs</label>
       <div class="songs-editor" id="songs-editor"></div>
     </div>
@@ -672,30 +815,97 @@ function renderEditModal(title) {
   document.getElementById('modal-close-btn2').addEventListener('click', closeModal);
   document.getElementById('modal-save-btn').addEventListener('click', saveEdit);
 
-  renderRolesGrid();
   renderSongsEditor();
   openModal();
 }
 
-function renderRolesGrid() {
-  const grid = document.getElementById('roles-grid');
-  if (!grid) return;
-  grid.innerHTML = ROLES.map(r => `
-    <div class="role-toggle ${state.editRoles.includes(r.id) ? 'selected' : ''}" data-role="${r.id}">
-      <span class="rt-icon">${r.icon}</span>${r.label}
-    </div>`).join('');
-  grid.querySelectorAll('.role-toggle').forEach(el => {
+function getAvailableSongRoles() {
+  const customRoles = new Set();
+  for (const rid of state.editRoles) {
+    if (isCustomRole(rid)) customRoles.add(rid);
+  }
+  for (const rids of Object.values(state.editSongs)) {
+    rids.filter(isCustomRole).forEach(rid => customRoles.add(rid));
+  }
+  return [
+    ...ROLES.filter(r => r.id !== 'other').map(r => r.id),
+    ...Array.from(customRoles).sort((a, b) => getRole(a).label.localeCompare(getRole(b).label)),
+  ];
+}
+
+function renderPendingSongRoles() {
+  const standardHtml = ROLES.filter(r => r.id !== 'other').map(({ id: rid }) => {
+    const role = getRole(rid);
+    const selected = state.pendingSongRoles.includes(rid);
+    return `
+      <div class="role-toggle ${selected ? 'selected' : ''}" data-pending-role="${rid}">
+        <span class="rt-icon">${role.icon}</span>${escapeHtml(role.label)}
+      </div>`;
+  }).join('');
+  const customHtml = state.pendingSongRoles.filter(isCustomRole).map(rid => {
+    const role = getRole(rid);
+    return `
+      <div class="role-toggle selected" data-pending-custom-role="${encodeDataValue(rid)}" title="Remove custom instrument">
+        <span class="rt-icon">${role.icon}</span>${escapeHtml(role.label)} <span style="opacity:0.7">✕</span>
+      </div>`;
+  }).join('');
+  const other = getRole('other');
+  const otherHtml = `
+    <div class="role-toggle ${state.pendingSongRoles.includes('other') ? 'selected' : ''}" data-pending-role="other">
+      <span class="rt-icon">${other.icon}</span>${escapeHtml(other.label)}
+    </div>`;
+  return standardHtml + customHtml + otherHtml;
+}
+
+function bindPendingSongRoleControls() {
+  document.querySelectorAll('[data-pending-role]').forEach(el => {
     el.addEventListener('click', () => {
-      const rid = el.dataset.role;
-      if (state.editRoles.includes(rid)) {
-        state.editRoles = state.editRoles.filter(r => r !== rid);
+      const rid = el.dataset.pendingRole;
+      if (state.pendingSongRoles.includes(rid)) {
+        state.pendingSongRoles = state.pendingSongRoles.filter(r => r !== rid);
+        if (rid === 'other') state.pendingOtherInstrument = '';
       } else {
-        state.editRoles.push(rid);
+        state.pendingSongRoles.push(rid);
       }
-      renderRolesGrid();
       renderSongsEditor();
     });
   });
+
+  document.querySelectorAll('[data-pending-custom-role]').forEach(el => {
+    el.addEventListener('click', () => {
+      const rid = decodeDataValue(el.dataset.pendingCustomRole);
+      state.pendingSongRoles = state.pendingSongRoles.filter(roleId => roleId !== rid);
+      renderSongsEditor();
+    });
+  });
+
+  const addOtherInstrument = () => {
+    const input = document.getElementById('pending-other-instrument-input');
+    const rid = makeCustomRoleId(input?.value);
+    if (!rid) {
+      toast('Type the instrument name for Other', 'error');
+      input?.focus();
+      return;
+    }
+    if (!state.pendingSongRoles.includes(rid)) state.pendingSongRoles.push(rid);
+    state.pendingOtherInstrument = '';
+    renderSongsEditor();
+    setTimeout(() => document.getElementById('pending-other-instrument-input')?.focus(), 0);
+  };
+
+  const otherInput = document.getElementById('pending-other-instrument-input');
+  if (otherInput) {
+    otherInput.addEventListener('input', e => {
+      state.pendingOtherInstrument = e.target.value;
+    });
+    otherInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addOtherInstrument();
+      }
+    });
+  }
+  document.getElementById('btn-add-pending-other-instrument')?.addEventListener('click', addOtherInstrument);
 }
 
 function renderSongsEditor() {
@@ -707,16 +917,39 @@ function renderSongsEditor() {
 
   const inputEl = document.getElementById('song-input-new');
   const currentVal = inputEl ? inputEl.value : '';
-
   const songs = Object.keys(state.editSongs);
-  
-    let html = `<div class="song-add-row">
+
+  const selectedSongHtml = state.pendingSongTitle ? `
+    <div style="background:var(--bg-tertiary);border:1px solid var(--border);border-radius:8px;padding:0.75rem;display:flex;align-items:center;justify-content:space-between;gap:0.75rem">
+      <div>
+        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);font-weight:700">Selected song</div>
+        <div style="margin-top:0.2rem">${formatSongTitle(state.pendingSongTitle)}</div>
+      </div>
+      <button type="button" class="btn btn-ghost" id="btn-clear-selected-song">Change</button>
+    </div>` : '';
+
+  const pendingRolesHtml = state.pendingSongTitle ? `
+    <div style="display:flex;flex-direction:column;gap:0.65rem;margin-top:0.8rem">
+      <div style="font-size:0.75rem;color:var(--text-muted);font-weight:600">Select instruments for this song</div>
+      <div class="roles-grid" id="pending-song-roles-grid">
+        ${renderPendingSongRoles()}
+      </div>
+      ${state.pendingSongRoles.includes('other') ? `
+        <div style="display:flex;gap:0.5rem;align-items:center">
+          <input id="pending-other-instrument-input" class="form-input" type="text" placeholder="Type the instrument..." autocomplete="off" style="flex:1" value="${escapeAttr(state.pendingOtherInstrument)}" />
+          <button type="button" class="btn btn-secondary" id="btn-add-pending-other-instrument" style="white-space:nowrap">+ Add Instrument</button>
+        </div>` : ''}
+    </div>` : '';
+
+  let html = `<div class="song-add-row">
     <div class="song-add-input-wrap">
-      <input class="form-input" id="song-input-new" type="text" placeholder="Add a song you play..." autocomplete="off" style="width:100%" />
+      <input class="form-input" id="song-input-new" type="text" placeholder="Search Apple Music and select a song..." autocomplete="off" style="width:100%" />
       <div id="autocomplete-dropdown" class="autocomplete-dropdown hidden"></div>
     </div>
-    <button class="btn btn-secondary" id="btn-add-song-new" style="white-space:nowrap">+ Add</button>
-  </div>`;
+    <button class="btn btn-secondary" id="btn-add-song-new" style="white-space:nowrap">+ Add Song</button>
+  </div>
+  ${selectedSongHtml}
+  ${pendingRolesHtml}`;
   
   if (songs.length === 0) {
     html += `<div class="no-songs" style="text-align:center;padding:1rem 0;color:var(--text-muted)">No songs added yet.</div>`;
@@ -727,16 +960,16 @@ function renderSongsEditor() {
       const encodedTitle = encodeDataValue(title);
       
       const roleBadges = rids.map(rid => {
-        const role = ROLE_MAP[rid];
+        const role = getRole(rid);
         if (!role) return '';
-        return `<span class="mini-role-badge" data-title="${encodedTitle}" data-role="${rid}" style="background:${role.color};color:#fff;border-radius:4px;padding:0.15rem 0.4rem;font-size:0.75rem;cursor:pointer;display:inline-flex;align-items:center;gap:0.3rem" title="Remove role">${role.icon} ${role.label} <span style="font-size:0.6rem;opacity:0.7">✕</span></span>`;
+        return `<span class="mini-role-badge" data-title="${encodedTitle}" data-role="${encodeDataValue(rid)}" style="background:${role.color};color:#fff;border-radius:4px;padding:0.15rem 0.4rem;font-size:0.75rem;cursor:pointer;display:inline-flex;align-items:center;gap:0.3rem" title="Remove role">${role.icon} ${escapeHtml(role.label)} <span style="font-size:0.6rem;opacity:0.7">✕</span></span>`;
       }).join('');
       
-      const availableRoles = ROLES.map(r => r.id).filter(rid => !rids.includes(rid));
+      const availableRoles = getAvailableSongRoles().filter(rid => !rids.includes(rid));
       const addSelectHtml = availableRoles.length > 0 ? `
         <select class="song-role-select" data-title="${encodedTitle}" style="background:transparent;border:1px dashed var(--text-muted);color:var(--text-primary);border-radius:4px;padding:0.1rem 0.3rem;font-size:0.75rem;cursor:pointer;outline:none">
           <option value="">+ Add Instrument</option>
-          ${availableRoles.map(r => `<option value="${r}">${ROLE_MAP[r].label}</option>`).join('')}
+          ${availableRoles.map(r => `<option value="${encodeDataValue(r)}">${escapeHtml(getRole(r).label)}</option>`).join('')}
         </select>
       ` : '';
       
@@ -759,8 +992,15 @@ function renderSongsEditor() {
   const newInputEl = document.getElementById('song-input-new');
   if (newInputEl) {
     newInputEl.value = currentVal;
-    if (currentVal) newInputEl.focus();
+    if (currentVal && !state.pendingSongTitle) newInputEl.focus();
   }
+
+  document.getElementById('btn-clear-selected-song')?.addEventListener('click', () => {
+    state.pendingSongTitle = '';
+    state.pendingSongRoles = [];
+    state.pendingOtherInstrument = '';
+    renderSongsEditor();
+  });
 
   editor.querySelectorAll('.song-tag-remove').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -772,7 +1012,7 @@ function renderSongsEditor() {
   editor.querySelectorAll('.mini-role-badge').forEach(badge => {
     badge.addEventListener('click', () => {
       const title = decodeDataValue(badge.dataset.title);
-      const rid = badge.dataset.role;
+      const rid = decodeDataValue(badge.dataset.role);
       state.editSongs[title] = state.editSongs[title].filter(r => r !== rid);
       renderSongsEditor();
     });
@@ -782,7 +1022,7 @@ function renderSongsEditor() {
     select.addEventListener('change', () => {
       if (!select.value) return;
       const title = decodeDataValue(select.dataset.title);
-      const rid = select.value;
+      const rid = decodeDataValue(select.value);
       if (!state.editSongs[title]) state.editSongs[title] = [];
       if (!state.editSongs[title].includes(rid)) {
         state.editSongs[title].push(rid);
@@ -797,6 +1037,8 @@ function renderSongsEditor() {
     addSongFromInput();
   });
 
+  bindPendingSongRoleControls();
+
   const input = document.getElementById('song-input-new');
   const dropdown = document.getElementById('autocomplete-dropdown');
   
@@ -807,12 +1049,16 @@ function renderSongsEditor() {
       if (e.key === 'Enter') {
         e.preventDefault();
         dropdown.classList.add('hidden');
-        addSongFromInput();
       }
     });
 
     input.addEventListener('input', e => {
       const query = e.target.value.trim();
+      if (state.pendingSongTitle) {
+        state.pendingSongTitle = '';
+        state.pendingSongRoles = [];
+        state.pendingOtherInstrument = '';
+      }
       if (query.length < 3) {
         dropdown.classList.add('hidden');
         return;
@@ -828,7 +1074,7 @@ function renderSongsEditor() {
           const data = await res.json();
           
           if (data.results.length === 0) {
-            dropdown.innerHTML = `<div class="autocomplete-loading">No official matches found. Press Add to use your spelling.</div>`;
+            dropdown.innerHTML = `<div class="autocomplete-loading">No Apple Music matches found. Choose a listed song to add it.</div>`;
             return;
           }
 
@@ -849,9 +1095,12 @@ function renderSongsEditor() {
 
           dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
             item.addEventListener('click', () => {
-              input.value = decodeDataValue(item.dataset.title);
+              state.pendingSongTitle = normalizeSongKey(decodeDataValue(item.dataset.title));
+              state.pendingSongRoles = [];
+              state.pendingOtherInstrument = '';
+              input.value = '';
               dropdown.classList.add('hidden');
-              addSongFromInput();
+              renderSongsEditor();
             });
           });
         } catch (err) {
@@ -870,22 +1119,33 @@ function renderSongsEditor() {
 }
 
 function addSongFromInput() {
-  const input = document.getElementById('song-input-new');
-  if (!input) return;
-  const val = normalizeSongKey(input.value);
-  if (!val) return;
-  
-  if (state.editRoles.length === 0) {
-    toast('Please select at least one instrument for this song first.', 'error');
+  const title = state.pendingSongTitle;
+  if (!title) {
+    toast('Select a song from Apple Music first', 'error');
+    document.getElementById('song-input-new')?.focus();
     return;
   }
-  
-  if (!state.editSongs[val]) {
-    state.editSongs[val] = [...state.editRoles];
+
+  const selectedRoles = buildSelectedSongRoles(state.pendingSongRoles, state.pendingOtherInstrument);
+
+  if (selectedRoles.length === 0) {
+    if (state.pendingSongRoles.includes('other')) {
+      toast('Type the instrument name for Other', 'error');
+      document.getElementById('pending-other-instrument-input')?.focus();
+    } else {
+      toast('Please select at least one instrument for this song first.', 'error');
+    }
+    return;
   }
-  
-  input.value = '';
-  renderRolesGrid();
+
+  if (!state.editSongs[title]) state.editSongs[title] = [];
+  for (const rid of selectedRoles) {
+    if (!state.editSongs[title].includes(rid)) state.editSongs[title].push(rid);
+  }
+
+  state.pendingSongTitle = '';
+  state.pendingSongRoles = [];
+  state.pendingOtherInstrument = '';
   renderSongsEditor();
   setTimeout(() => { const el = document.getElementById('song-input-new'); if (el) el.focus(); }, 50);
 }
@@ -895,12 +1155,17 @@ async function saveEdit() {
   const name = nameInput.value.trim();
   if (!name) { nameInput.focus(); toast('Please enter your name', 'error'); return; }
 
-  // If there's un-added text in the song input, try to add it first
+  if (state.pendingSongTitle) {
+    addSongFromInput();
+    if (state.pendingSongTitle) return;
+  }
+
+  // Free-form song entry is intentionally disabled for now; users must choose a listed Apple result.
   const songInput = document.getElementById('song-input-new');
   if (songInput && songInput.value.trim()) {
-    addSongFromInput();
-    // If it's still there, it means validation failed (e.g., no instrument selected). Stop saving.
-    if (songInput.value.trim()) return; 
+    songInput.focus();
+    toast('Select a song from Apple Music before saving', 'error');
+    return;
   }
 
   const saveBtn = document.getElementById('modal-save-btn');
@@ -924,7 +1189,7 @@ async function saveEdit() {
     rids.forEach(r => allSongRids.add(r));
   }
 
-  const finalRoles = Array.from(new Set([...state.editRoles, ...allSongRids]));
+  const finalRoles = Array.from(allSongRids);
   
   if (finalRoles.length === 0) {
     saveBtn.disabled = false;
@@ -1073,6 +1338,17 @@ async function init() {
   document.getElementById('toggle-members').addEventListener('click', () => switchView('members'));
   document.getElementById('toggle-songbook').addEventListener('click', () => switchView('songbook'));
   document.getElementById('toggle-bandbook').addEventListener('click', () => switchView('bandbook'));
+  document.querySelector('.logo')?.addEventListener('click', e => {
+    e.preventDefault();
+    closeModal();
+    state.search = '';
+    state.filter = 'all';
+    state.customFilter = 'all';
+    document.getElementById('search-input').value = '';
+    renderFilterChips();
+    switchView('members');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
 
   try {
     await loadMembers();
@@ -1095,13 +1371,20 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     buildBandbookFrom,
     buildSongbookFrom,
+    buildSelectedSongRoles,
     decodeDataValue,
     encodeDataValue,
     escapeAttr,
     escapeHtml,
     formatSongTitle,
     getInitials,
+    getCustomRoleOptions,
+    getOrderedRoleIds,
+    getRole,
+    makeCustomRoleId,
+    memberMatchesRoleFilter,
     normaliseSearch,
     normalizeSongKey,
+    ROLES,
   };
 }

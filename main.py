@@ -47,6 +47,7 @@ VALID_ROLE_IDS = {
     "banjo",
     "synth",
 }
+CUSTOM_ROLE_PREFIX = "other:"
 
 
 # ── API routes (must be declared BEFORE the static-file mount) ────────────────
@@ -114,14 +115,27 @@ def title_case_name(name: str) -> str:
     return " ".join(part.title() for part in name.strip().split())
 
 
+def normalize_role_id(role_id: str) -> str:
+    role_id = role_id.strip()
+    if role_id in VALID_ROLE_IDS:
+        return role_id
+    if role_id == "other":
+        raise HTTPException(status_code=400, detail="Other instrument name is required")
+    if role_id.lower().startswith(CUSTOM_ROLE_PREFIX):
+        label = title_case_name(role_id[len(CUSTOM_ROLE_PREFIX):])
+        if not label:
+            raise HTTPException(status_code=400, detail="Other instrument name is required")
+        return f"{CUSTOM_ROLE_PREFIX}{label}"
+    raise HTTPException(status_code=400, detail=f"Unknown role: {role_id}")
+
+
 def unique_roles(role_ids: list[str]) -> list[str]:
     """Validate and de-duplicate role IDs while preserving the user's order."""
     roles: list[str] = []
     for role_id in role_ids:
-        if role_id not in VALID_ROLE_IDS:
-            raise HTTPException(status_code=400, detail=f"Unknown role: {role_id}")
-        if role_id not in roles:
-            roles.append(role_id)
+        normalized_role_id = normalize_role_id(role_id)
+        if normalized_role_id not in roles:
+            roles.append(normalized_role_id)
     return roles
 
 

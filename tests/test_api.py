@@ -114,6 +114,25 @@ class TestCreateMember:
         assert res.status_code == 400
         assert "Unknown role" in res.json()["detail"]
 
+    def test_accepts_custom_other_instrument(self, client):
+        res = client.post("/api/members", json={
+            "name": "Carlos",
+            "roles": ["other:berimbau"],
+            "songs": {"Untitled Jam": ["other:berimbau"]},
+        })
+        assert res.status_code == 201
+        assert res.json()["roles"] == ["other:Berimbau"]
+        assert res.json()["songs"] == {"Untitled Jam": ["other:Berimbau"]}
+
+    def test_rejects_bare_other_instrument(self, client):
+        res = client.post("/api/members", json={
+            "name": "Carlos",
+            "roles": ["other"],
+            "songs": {},
+        })
+        assert res.status_code == 400
+        assert "Other instrument name is required" in res.json()["detail"]
+
     def test_rejects_unknown_song_role(self, client):
         res = client.post("/api/members", json={
             "name": "Carlos",
