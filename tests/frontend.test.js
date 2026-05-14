@@ -23,6 +23,17 @@ test('encodes and decodes dataset values without losing special characters', () 
   assert.equal(app.decodeDataValue(app.encodeDataValue(raw)), raw);
 });
 
+test('normalizes remastered song editions before saving', () => {
+  assert.equal(
+    app.normalizeSongKey(`oasis - don't look back in anger (remastered)`),
+    `Oasis - Don't Look Back In Anger`
+  );
+  assert.equal(
+    app.normalizeSongKey(`Oasis - Don't Look Back In Anger - 2014 Remaster`),
+    `Oasis - Don't Look Back In Anger`
+  );
+});
+
 test('builds songbook rows and filters by member name', () => {
   const members = [
     {

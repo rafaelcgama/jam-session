@@ -50,6 +50,7 @@ jam-session/
 ├── scripts/
 │   ├── migrate_table_to_members.py  # Rename legacy DB table from musicians to members
 │   ├── migrate_names_title_case.py  # Normalize existing names in members
+│   ├── migrate_song_titles.py       # Normalize existing song titles in members
 │   ├── pull_prod_db.sh              # Refresh local jam.db from production when needed
 │   └── pull_prod_snapshot.sh        # Refresh prod-jam.db snapshot for DataGrip
 └── tests/
@@ -143,6 +144,7 @@ All endpoints are prefixed with `/api`.
 - `name` is required and must be unique case-insensitively.
 - `roles` must include at least one known instrument.
 - Song titles must contain visible text after sanitization.
+- Remaster-only song suffixes like `(Remastered)` and `- 2014 Remaster` are removed so Songbook grouping stays clean.
 - Every song must include at least one known instrument.
 - Duplicate role IDs are removed while preserving order.
 - Song instruments are merged into the profile's role list so profile cards and song breakdowns stay consistent.
@@ -218,6 +220,12 @@ Existing names in members can be normalized to the app's title-case convention w
 
 ```bash
 ./scripts/migrate_names_title_case.py ./jam.db
+```
+
+Existing song titles can be normalized to remove remaster-only variants with:
+
+```bash
+./scripts/migrate_song_titles.py ./jam.db
 ```
 
 Older databases with a `musicians` table are migrated to `members` automatically on app startup. You can also run the table migration manually:

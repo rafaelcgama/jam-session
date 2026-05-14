@@ -145,6 +145,20 @@ class TestCreateMember:
         assert res.json()["roles"] == ["guitarist", "singer"]
         assert res.json()["songs"] == {"Radiohead - Creep": ["guitarist", "singer"]}
 
+    def test_normalizes_remastered_song_editions(self, client):
+        res = client.post("/api/members", json={
+            "name": "Carlos",
+            "roles": ["guitarist"],
+            "songs": {
+                "oasis - don't look back in anger (remastered)": ["guitarist"],
+                "Oasis - Don't Look Back In Anger": ["singer"],
+                "Oasis - Don't Look Back In Anger - 2014 Remaster": ["bassist"],
+            },
+        })
+        assert res.status_code == 201
+        assert res.json()["roles"] == ["guitarist", "singer", "bassist"]
+        assert res.json()["songs"] == {"Oasis - Don't Look Back In Anger": ["guitarist", "singer", "bassist"]}
+
     def test_adds_song_roles_to_profile_roles(self, client):
         res = client.post("/api/members", json={
             "name": "Carlos",

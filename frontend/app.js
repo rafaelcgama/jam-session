@@ -87,6 +87,33 @@ function normaliseSearch(value) {
   return String(value ?? '').toLowerCase().trim();
 }
 
+const REMASTER_EDITION_RE = /\s*(?:[\(\[]\s*(?:(?:\d{2,4}\s+)?(?:digital\s+)?remaster(?:ed)?(?:\s+\d{2,4})?(?:\s+version)?|remaster(?:ed)?\s+version)\s*[\)\]]|[-–—]\s*(?:(?:\d{2,4}\s+)?(?:digital\s+)?remaster(?:ed)?(?:\s+\d{2,4})?(?:\s+version)?|remaster(?:ed)?\s+version))\s*$/i;
+const CONTRACTION_RE = /\b([A-Za-z]+)'(S|T|RE|VE|LL|D|M)\b/g;
+
+function titlePreservingContractions(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/\b\w/g, ch => ch.toUpperCase())
+    .replace(CONTRACTION_RE, (_, word, suffix) => `${word}'${suffix.toLowerCase()}`);
+}
+
+function removeSongEditionSuffix(value) {
+  let previous = String(value ?? '').trim();
+  while (true) {
+    const normalized = previous.replace(REMASTER_EDITION_RE, '').trim();
+    if (normalized === previous) return normalized;
+    previous = normalized;
+  }
+}
+
+function normalizeSongKey(value) {
+  return removeSongEditionSuffix(value)
+    .split('-')
+    .map(part => titlePreservingContractions(removeSongEditionSuffix(part)))
+    .filter(Boolean)
+    .join(' - ');
+}
+
 // ===== FILTER =====
 function getFilteredMembers() {
   let list = members;
@@ -845,7 +872,7 @@ function renderSongsEditor() {
 function addSongFromInput() {
   const input = document.getElementById('song-input-new');
   if (!input) return;
-  const val = input.value.trim();
+  const val = normalizeSongKey(input.value);
   if (!val) return;
   
   if (state.editRoles.length === 0) {
@@ -1075,5 +1102,6 @@ if (typeof module !== 'undefined' && module.exports) {
     formatSongTitle,
     getInitials,
     normaliseSearch,
+    normalizeSongKey,
   };
 }
