@@ -1,21 +1,37 @@
 // ===== ROLE DEFINITIONS =====
+const INSTRUMENT_ICONS = {
+  harmonica: `
+    <svg class="instrument-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="8" width="18" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
+      <path d="M5 11h14M5 14h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M8 8v8M12 8v8M16 8v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>`,
+  ukulele: `
+    <svg class="instrument-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M13.5 6.5l5-5 2 2-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M12.2 7.8c1.7-1.2 4-.7 5.1 1 1 1.6.5 3.7-1 4.8.6 1.8-.1 3.9-1.8 5-2.2 1.5-5.4.6-7.2-2.1-1.8-2.7-1.6-6 .6-7.5 1.3-.9 3-.8 4.3.1Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+      <circle cx="12.3" cy="13.2" r="1.7" fill="currentColor"/>
+      <path d="M9.2 16.2l5.9-5.9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+    </svg>`,
+};
+
 const ROLES = [
   { id: 'singer',     label: 'Vocals',     icon: '🎤', color: '#f56bab' },
   { id: 'guitarist',  label: 'Guitar',     icon: '🎸', color: '#5b8cff' },
   { id: 'bassist',    label: 'Bass',       icon: '🎵', color: '#9b72f5' },
   { id: 'drummer',    label: 'Drums',      icon: '🥁', color: '#f5a623' },
   { id: 'keys',       label: 'Keys',       icon: '🎹', color: '#3ecf8e' },
-  { id: 'harmonica',  label: 'Harmonica',  icon: '🎼', color: '#56cfe1' },
-  { id: 'violinist',  label: 'Violin',     icon: '🎻', color: '#e56bab' },
-  { id: 'flutist',    label: 'Flute',      icon: '🪈', color: '#ffd166' },
-  { id: 'ukulele',    label: 'Ukulele',    icon: '🪕', color: '#06d6a0' },
-  { id: 'horn',       label: 'Horn',       icon: '🎺', color: '#ef476f' },
-  { id: 'cello',      label: 'Cello',      icon: '🎻', color: '#c44536' },
-  { id: 'saxophone',  label: 'Saxophone',  icon: '🎷', color: '#fca311' },
-  { id: 'percussion', label: 'Percussion', icon: '🪘', color: '#8b5a2b' },
   { id: 'accordion',  label: 'Accordion',  icon: '🪗', color: '#d90429' },
   { id: 'banjo',      label: 'Banjo',      icon: '🪕', color: '#ffb703' },
+  { id: 'cello',      label: 'Cello',      icon: '🎻', color: '#c44536' },
+  { id: 'flutist',    label: 'Flute',      icon: '🪈', color: '#ffd166' },
+  { id: 'harmonica',  label: 'Harmonica',  icon: INSTRUMENT_ICONS.harmonica, color: '#56cfe1' },
+  { id: 'horn',       label: 'Horn',       icon: '🎺', color: '#ef476f' },
+  { id: 'percussion', label: 'Percussion', icon: '🪘', color: '#8b5a2b' },
+  { id: 'saxophone',  label: 'Saxophone',  icon: '🎷', color: '#fca311' },
   { id: 'synth',      label: 'Synth/DJ',   icon: '🎛️', color: '#00f5d4' },
+  { id: 'ukulele',    label: 'Ukulele',    icon: INSTRUMENT_ICONS.ukulele, color: '#06d6a0' },
+  { id: 'violinist',  label: 'Violin',     icon: '🎻', color: '#e56bab' },
   { id: 'other',      label: 'Other',      icon: '🎼', color: '#8fa3ff' },
 ];
 

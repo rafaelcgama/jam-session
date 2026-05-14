@@ -67,6 +67,41 @@ test('keeps Other as the final instrument with the clef icon', () => {
   assert.equal(other.icon, '🎼');
 });
 
+test('orders instruments by relevance, then alphabetically, with Other last', () => {
+  assert.deepEqual(
+    app.ROLES.map(role => role.label),
+    [
+      'Vocals',
+      'Guitar',
+      'Bass',
+      'Drums',
+      'Keys',
+      'Accordion',
+      'Banjo',
+      'Cello',
+      'Flute',
+      'Harmonica',
+      'Horn',
+      'Percussion',
+      'Saxophone',
+      'Synth/DJ',
+      'Ukulele',
+      'Violin',
+      'Other',
+    ]
+  );
+});
+
+test('uses instrument-specific icons for harmonica and ukulele', () => {
+  const harmonica = app.ROLES.find(role => role.id === 'harmonica');
+  const ukulele = app.ROLES.find(role => role.id === 'ukulele');
+
+  assert.match(harmonica.icon, /instrument-icon/);
+  assert.match(ukulele.icon, /instrument-icon/);
+  assert.notEqual(harmonica.icon, '🎶');
+  assert.notEqual(ukulele.icon, '🌴');
+});
+
 test('builds and displays custom Other instruments with the clef icon', () => {
   const roleId = app.makeCustomRoleId('  berimbau  ');
   assert.equal(roleId, 'other:Berimbau');
