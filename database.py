@@ -3,6 +3,8 @@ import json
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent / "jam.db"
+TABLE_NAME = "members"
+LEGACY_TABLE_NAME = "musicians"
 
 def get_connection() -> sqlite3.Connection:
     """Open a connection with row_factory so rows behave like dicts."""
@@ -11,7 +13,7 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
-def parse_musician(row: sqlite3.Row) -> dict:
+def parse_member(row: sqlite3.Row) -> dict:
     """Convert a DB row into a plain dict, deserialising the JSON columns."""
     d = dict(row)
     d["roles"] = json.loads(d["roles"])
@@ -20,10 +22,22 @@ def parse_musician(row: sqlite3.Row) -> dict:
 
 
 def init_db() -> None:
-    """Create the table if the DB is empty."""
+    """Create or migrate the members table."""
     with get_connection() as conn:
+        legacy_table = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            (LEGACY_TABLE_NAME,),
+        ).fetchone()
+        members_table = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            (TABLE_NAME,),
+        ).fetchone()
+
+        if legacy_table and not members_table:
+            conn.execute(f"ALTER TABLE {LEGACY_TABLE_NAME} RENAME TO {TABLE_NAME}")
+
         conn.execute("""
-            CREATE TABLE IF NOT EXISTS musicians (
+            CREATE TABLE IF NOT EXISTS members (
                 id        TEXT PRIMARY KEY,
                 name      TEXT NOT NULL,
                 colorIdx  INTEGER DEFAULT 0,
@@ -40,56 +54,56 @@ def init_db() -> None:
 def get_all() -> list[dict]:
     with get_connection() as conn:
         rows = conn.execute(
-            "SELECT * FROM musicians ORDER BY joinedAt ASC, name ASC"
+            f"SELECT * FROM {TABLE_NAME} ORDER BY joinedAt ASC, name ASC"
         ).fetchall()
-    return [parse_musician(r) for r in rows]
+    return [parse_member(r) for r in rows]
 
 
-def get_by_id(musician_id: str) -> dict | None:
+def get_by_id(member_id: str) -> dict | None:
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT * FROM musicians WHERE id = ?", (musician_id,)
+            f"SELECT * FROM {TABLE_NAME} WHERE id = ?", (member_id,)
         ).fetchone()
-    return parse_musician(row) if row else None
+    return parse_member(row) if row else None
 
 
-def create(musician: dict) -> dict:
+def create(member: dict) -> dict:
     with get_connection() as conn:
         conn.execute(
-            "INSERT INTO musicians (id, name, colorIdx, roles, songs, joinedAt) "
+            f"INSERT INTO {TABLE_NAME} (id, name, colorIdx, roles, songs, joinedAt) "
             "VALUES (?, ?, ?, ?, ?, ?)",
             (
-                musician["id"],
-                musician["name"],
-                musician["colorIdx"],
-                json.dumps(musician["roles"]),
-                json.dumps(musician["songs"]),
-                musician["joinedAt"],
+                member["id"],
+                member["name"],
+                member["colorIdx"],
+                json.dumps(member["roles"]),
+                json.dumps(member["songs"]),
+                member["joinedAt"],
             ),
         )
         conn.commit()
-    return get_by_id(musician["id"])
+    return get_by_id(member["id"])
 
 
-def update(musician_id: str, data: dict) -> dict:
+def update(member_id: str, data: dict) -> dict:
     with get_connection() as conn:
         conn.execute(
-            "UPDATE musicians SET name=?, colorIdx=?, roles=?, songs=? WHERE id=?",
+            f"UPDATE {TABLE_NAME} SET name=?, colorIdx=?, roles=?, songs=? WHERE id=?",
             (
                 data["name"],
                 data["colorIdx"],
                 json.dumps(data["roles"]),
                 json.dumps(data["songs"]),
-                musician_id,
+                member_id,
             ),
         )
         conn.commit()
-    return get_by_id(musician_id)
+    return get_by_id(member_id)
 
 
-def delete(musician_id: str) -> None:
+def delete(member_id: str) -> None:
     with get_connection() as conn:
-        conn.execute("DELETE FROM musicians WHERE id = ?", (musician_id,))
+        conn.execute(f"DELETE FROM {TABLE_NAME} WHERE id = ?", (member_id,))
         conn.commit()
 
 
@@ -97,12 +111,12 @@ def name_exists(name: str, exclude_id: str | None = None) -> bool:
     with get_connection() as conn:
         if exclude_id:
             row = conn.execute(
-                "SELECT id FROM musicians WHERE LOWER(name) = LOWER(?) AND id != ?",
+                f"SELECT id FROM {TABLE_NAME} WHERE LOWER(name) = LOWER(?) AND id != ?",
                 (name, exclude_id),
             ).fetchone()
         else:
             row = conn.execute(
-                "SELECT id FROM musicians WHERE LOWER(name) = LOWER(?)",
+                f"SELECT id FROM {TABLE_NAME} WHERE LOWER(name) = LOWER(?)",
                 (name,),
             ).fetchone()
     return row is not None

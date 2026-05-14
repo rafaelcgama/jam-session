@@ -1,4 +1,4 @@
-# 🎸 Jam Session — Who Plays What
+# 🎼 JAM Session — Digital Nomads FLN
 
 A lightweight web app for jam session members to register their name, instruments, and the songs they play. Built for the **Digital Nomads FLN** community.
 
@@ -9,11 +9,11 @@ A lightweight web app for jam session members to register their name, instrument
 ## ✨ Features
 
 - Add members with their name, instruments, and song repertoire
-- View, edit, or remove any member's profile from the crew grid
-- Filter the crew by instrument and search by member or song
+- View, edit, or remove profiles from the crew grid
+- Filter the crew by instrument and search by members or songs
 - Songbook tab that groups all registered songs and shows who can play each instrument
 - Bandbook tab that groups songs by artist/band from `Artist - Song` titles
-- Instant Band breakdowns for a song, with clickable member badges that open the member profile without leaving Songbook or Bandbook
+- Instant Band breakdowns for a song, with clickable badges for members that open profiles without leaving Songbook or Bandbook
 - iTunes-powered song autocomplete when adding repertoire, while still allowing custom titles
 - Song-first data model: add a song once, assign multiple instruments to it
 - Server-side validation for duplicate names, unknown instruments, blank song titles, and songs without instruments
@@ -42,11 +42,16 @@ jam-session/
 ├── main.py           # FastAPI app & API routes
 ├── database.py       # SQLite helpers (CRUD operations)
 ├── requirements.txt  # Python dependencies
-├── jam.db            # SQLite database (gitignored, lives on server)
+├── jam.db            # Local SQLite database (gitignored)
 ├── frontend/
 │   ├── index.html    # Single-page app shell
 │   ├── style.css     # Styling
 │   └── app.js        # All UI logic (rendering, modals, API calls)
+├── scripts/
+│   ├── migrate_table_to_members.py  # Rename legacy DB table from musicians to members
+│   ├── migrate_names_title_case.py  # Normalize existing names in members
+│   ├── pull_prod_db.sh              # Refresh local jam.db from production when needed
+│   └── pull_prod_snapshot.sh        # Refresh prod-jam.db snapshot for DataGrip
 └── tests/
     ├── frontend.test.js  # Frontend unit tests using Node's built-in test runner
     ├── test_api.py       # Backend unit & integration tests
@@ -112,14 +117,14 @@ Current coverage focuses on API validation, database helpers, Songbook/Bandbook 
 
 All endpoints are prefixed with `/api`.
 
-| Method   | Endpoint                        | Description                   |
-|----------|---------------------------------|-------------------------------|
-| `GET`    | `/api/musicians`                | List all members              |
-| `POST`   | `/api/musicians`                | Add a new member              |
-| `PUT`    | `/api/musicians/{musician_id}`  | Update an existing member     |
-| `DELETE` | `/api/musicians/{musician_id}`  | Remove a member               |
+| Method   | Endpoint                    | Description                   |
+|----------|-----------------------------|-------------------------------|
+| `GET`    | `/api/members`              | List all members              |
+| `POST`   | `/api/members`              | Add a profile to members      |
+| `PUT`    | `/api/members/{member_id}` | Update one profile            |
+| `DELETE` | `/api/members/{member_id}` | Remove one profile            |
 
-### Member Schema
+### Members Payload
 
 ```json
 {
@@ -169,11 +174,12 @@ The Nginx + systemd setup means the app is automatically served and restarts on 
 ## 🗄 Database
 
 - **Engine:** SQLite
-- **Location on server:** `/var/www/jam-session/jam.db`
+- **Local development DB:** `./jam.db`
+- **Production DB:** `/var/www/jam-session/jam.db` on `jam-session-vm`
 - **Schema:**
 
 ```sql
-CREATE TABLE musicians (
+CREATE TABLE members (
     id        TEXT PRIMARY KEY,
     name      TEXT NOT NULL,
     colorIdx  INTEGER DEFAULT 0,
@@ -183,7 +189,81 @@ CREATE TABLE musicians (
 );
 ```
 
-> **⚠️ Important:** Never delete `jam.db` on the production server. Any structural schema changes must be handled via a migration script, not by dropping the database.
+### Local vs Production Data
+
+Local development and production use separate SQLite files:
+
+- Local app at `http://localhost:3000` reads `./jam.db`.
+- Live app at `https://dnomads-jam-fln.duckdns.org` reads `/var/www/jam-session/jam.db` on the VM.
+- The files do not sync automatically.
+- Local test data should never be pushed back over production data.
+
+When you want local development to reflect the latest live data, pull a fresh production snapshot down:
+
+```bash
+./scripts/pull_prod_db.sh
+```
+
+The script:
+
+- backs up the current local database under `.db_backups/jam.db.backup.YYYYMMDDHHMMSS`
+- copies the live production DB from the VM
+- validates the downloaded SQLite file with `PRAGMA integrity_check`
+- replaces only the local `jam.db`
+- removes the temporary DB copy from the VM
+
+This is an intentional one-way refresh from production to local. It keeps costs at zero while keeping development data separate by default.
+
+Existing names in members can be normalized to the app's title-case convention with:
+
+```bash
+./scripts/migrate_names_title_case.py ./jam.db
+```
+
+Older databases with a `musicians` table are migrated to `members` automatically on app startup. You can also run the table migration manually:
+
+```bash
+./scripts/migrate_table_to_members.py ./jam.db
+```
+
+Run the same script on production only after deploying matching application code:
+
+```bash
+ssh jam-session-vm
+cd /var/www/jam-session
+./scripts/migrate_names_title_case.py ./jam.db
+```
+
+### DataGrip Setup
+
+You can keep two SQLite data sources in DataGrip:
+
+| DataGrip data source | File | Purpose |
+|----------------------|------|---------|
+| `Jam Session Local` | `./jam.db` | Local development and testing data |
+| `Jam Session Production Snapshot` | `./prod-jam.db` | Refreshable copy of live production data |
+
+Create the local DataGrip source from:
+
+```text
+/Users/rafaelcgama/Projects/jam-session/jam.db
+```
+
+Create the production snapshot source from:
+
+```text
+/Users/rafaelcgama/Projects/jam-session/prod-jam.db
+```
+
+To refresh only the production snapshot for DataGrip without touching your local development DB:
+
+```bash
+./scripts/pull_prod_snapshot.sh
+```
+
+This updates `prod-jam.db` from the VM. In DataGrip, refresh the data source/table after running the script.
+
+> **⚠️ Important:** Never delete or overwrite `jam.db` on the production server. Any structural schema changes must be handled via a migration script, not by dropping the database.
 
 ---
 
@@ -192,7 +272,7 @@ CREATE TABLE musicians (
 | Version | Description                                             |
 |---------|---------------------------------------------------------|
 | `v1.2.0` | Songbook and Bandbook polish, profile links from song/band breakdowns, safer frontend rendering, stricter API validation, frontend unit tests |
-| `v1.1.0` | Songbook/Bandbook views, member search improvements, iTunes autocomplete, dynamic section titles |
+| `v1.1.0` | Songbook/Bandbook views, members search improvements, iTunes autocomplete, dynamic section titles |
 | `v1.0.0` | Initial production release — song-first data model, live on GCP |
 
 ---

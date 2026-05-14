@@ -21,7 +21,7 @@ app = FastAPI(
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
-class MusicianIn(BaseModel):
+class MemberIn(BaseModel):
     name: str
     colorIdx: int = 0
     roles: list[str]
@@ -50,9 +50,9 @@ VALID_ROLE_IDS = {
 
 # ── API routes (must be declared BEFORE the static-file mount) ────────────────
 
-@app.get("/api/musicians", summary="List all members")
-def get_musicians():
-    """Return every member with their roles and songs."""
+@app.get("/api/members", summary="List all members")
+def get_members():
+    """Return all members with their roles and songs."""
     return database.get_all()
 
 
@@ -60,6 +60,11 @@ def sanitize_song_key(key: str) -> str:
     """Sanitizes 'Artist - Title' or 'Title' into Title Case."""
     parts = [p.strip().title() for p in key.split("-") if p.strip()]
     return " - ".join(parts)
+
+
+def title_case_name(name: str) -> str:
+    """Normalize names in members for consistent display and duplicate checks."""
+    return " ".join(part.title() for part in name.strip().split())
 
 
 def unique_roles(role_ids: list[str]) -> list[str]:
@@ -100,10 +105,10 @@ def merge_song_roles(profile_roles: list[str], songs: dict[str, list[str]]) -> l
                 roles.append(role_id)
     return roles
 
-@app.post("/api/musicians", status_code=201, summary="Add a new member")
-def create_musician(data: MusicianIn):
-    """Register a new member of the jam session."""
-    name = data.name.strip()
+@app.post("/api/members", status_code=201, summary="Add a profile to members")
+def create_member(data: MemberIn):
+    """Register a profile in members."""
+    name = title_case_name(data.name)
     if not name:
         raise HTTPException(status_code=400, detail="Name is required")
     if not data.roles:
@@ -116,7 +121,7 @@ def create_musician(data: MusicianIn):
     sanitized_songs = sanitize_songs(data.songs)
     roles = merge_song_roles(roles, sanitized_songs)
 
-    musician = {
+    member = {
         "id":       str(uuid.uuid4()),
         "name":     name,
         "colorIdx": data.colorIdx,
@@ -124,28 +129,28 @@ def create_musician(data: MusicianIn):
         "songs":    sanitized_songs,
         "joinedAt": str(date.today()),
     }
-    return database.create(musician)
+    return database.create(member)
 
 
-@app.put("/api/musicians/{musician_id}", summary="Update a member's profile")
-def update_musician(musician_id: str, data: MusicianIn):
-    """Edit an existing member's name, roles, or songs."""
-    if not database.get_by_id(musician_id):
+@app.put("/api/members/{member_id}", summary="Update one profile")
+def update_member(member_id: str, data: MemberIn):
+    """Edit one profile's name, roles, or songs."""
+    if not database.get_by_id(member_id):
         raise HTTPException(status_code=404, detail="Member not found")
 
-    name = data.name.strip()
+    name = title_case_name(data.name)
     if not name:
         raise HTTPException(status_code=400, detail="Name is required")
     if not data.roles:
         raise HTTPException(status_code=400, detail="At least one role is required")
-    if database.name_exists(name, exclude_id=musician_id):
+    if database.name_exists(name, exclude_id=member_id):
         raise HTTPException(status_code=409, detail=f'"{name}" is already in the session')
 
     roles = unique_roles(data.roles)
     sanitized_songs = sanitize_songs(data.songs)
     roles = merge_song_roles(roles, sanitized_songs)
 
-    return database.update(musician_id, {
+    return database.update(member_id, {
         "name":     name,
         "colorIdx": data.colorIdx,
         "roles":    roles,
@@ -153,12 +158,12 @@ def update_musician(musician_id: str, data: MusicianIn):
     })
 
 
-@app.delete("/api/musicians/{musician_id}", summary="Remove a member")
-def delete_musician(musician_id: str):
-    """Remove a member from the jam session."""
-    if not database.get_by_id(musician_id):
+@app.delete("/api/members/{member_id}", summary="Remove one profile")
+def delete_member(member_id: str):
+    """Remove one profile from members."""
+    if not database.get_by_id(member_id):
         raise HTTPException(status_code=404, detail="Member not found")
-    database.delete(musician_id)
+    database.delete(member_id)
     return {"success": True}
 
 

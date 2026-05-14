@@ -25,10 +25,10 @@ const AVATAR_COLORS = [
   ['#1a1a2e','#3ecf8e'], ['#1a1a2e','#f56bab'], ['#1a1a2e','#56cfe1'],
 ];
 
-const API = '/api/musicians';
+const API = '/api/members';
 
 // ===== STATE =====
-let musicians = [];   // in-memory cache from server
+let members = [];   // in-memory cache from server
 let state = {
   view:      'members',  // 'members' | 'songbook'
   filter:    'all',
@@ -50,10 +50,10 @@ async function apiFetch(url, options = {}) {
   return data;
 }
 
-async function loadMusicians() {
+async function loadMembers() {
   showGridLoading();
-  musicians = await apiFetch(API);
-  renderMusicians();
+  members = await apiFetch(API);
+  renderMembers();
 }
 
 // ===== UTILS =====
@@ -88,8 +88,8 @@ function normaliseSearch(value) {
 }
 
 // ===== FILTER =====
-function getFilteredMusicians() {
-  let list = musicians;
+function getFilteredMembers() {
+  let list = members;
   const q = normaliseSearch(state.search);
   if (q) {
     list = list.filter(m => {
@@ -105,26 +105,26 @@ function getFilteredMusicians() {
 
 // ===== RENDER =====
 function showGridLoading() {
-  const grid = document.getElementById('musicians-grid');
+  const grid = document.getElementById('members-grid');
   grid.innerHTML = `
     <div class="empty-state" style="grid-column:1/-1">
-      <div class="empty-icon" style="animation:pulse 1.2s ease infinite">🎸</div>
+      <div class="empty-icon" style="animation:pulse 1.2s ease infinite">🎼</div>
       <div class="empty-title">Loading the crew…</div>
     </div>`;
 }
 
-function renderMusicians() {
+function renderMembers() {
   // Dispatch to the correct view
   if (state.view === 'songbook') { renderSongbook(); return; }
   if (state.view === 'bandbook') { renderBandbook(); return; }
 
-  const grid = document.getElementById('musicians-grid');
-  const list = getFilteredMusicians();
-  const total = musicians.length;
+  const grid = document.getElementById('members-grid');
+  const list = getFilteredMembers();
+  const total = members.length;
 
   document.querySelector('.section-count').textContent =
     list.length === total
-      ? ` ${total} Member${total !== 1 ? 's' : ''}`
+      ? ` ${total} ${total === 1 ? 'member' : 'members'}`
       : ` ${list.length} of ${total}`;
 
   if (list.length === 0) {
@@ -139,7 +139,7 @@ function renderMusicians() {
 
   grid.innerHTML = list.map(m => renderCard(m)).join('');
 
-  grid.querySelectorAll('.musician-card').forEach(card => {
+  grid.querySelectorAll('.member-card').forEach(card => {
     card.querySelector('.btn-view').addEventListener('click', e => {
       e.stopPropagation();
       openViewModal(card.dataset.id);
@@ -153,9 +153,9 @@ function renderMusicians() {
       if (!confirm(`Remove ${card.dataset.name} from the session?`)) return;
       try {
         await apiFetch(`${API}/${card.dataset.id}`, { method: 'DELETE' });
-        musicians = musicians.filter(m => m.id !== card.dataset.id);
-        renderMusicians();
-        toast('Member removed', 'success');
+        members = members.filter(m => m.id !== card.dataset.id);
+        renderMembers();
+        toast('Removed from members', 'success');
       } catch (err) {
         toast(err.message, 'error');
       }
@@ -166,18 +166,18 @@ function renderMusicians() {
 // ===== SONGBOOK =====
 
 /**
- * Aggregates all unique songs from all musicians into a map:
- * { songTitle -> { roleId -> [musicianName, ...] } }
+ * Aggregates all unique songs from all members into a map:
+ * { songTitle -> { roleId -> [memberName, ...] } }
  */
-function buildSongbookFrom(sourceMusicians, search = '') {
+function buildSongbookFrom(sourceMembers, search = '') {
   const q = normaliseSearch(search);
   const book = {};
-  for (const m of sourceMusicians) {
+  for (const m of sourceMembers) {
     for (const [title, rids] of Object.entries(m.songs)) {
       const matchesTitle = normaliseSearch(title).includes(q);
-      const matchesMusician = normaliseSearch(m.name).includes(q);
+      const matchesMember = normaliseSearch(m.name).includes(q);
       
-      if (q && !matchesTitle && !matchesMusician) continue;
+      if (q && !matchesTitle && !matchesMember) continue;
       
       if (!book[title]) book[title] = {};
       for (const rid of rids) {
@@ -192,7 +192,7 @@ function buildSongbookFrom(sourceMusicians, search = '') {
 }
 
 function buildSongbook() {
-  return buildSongbookFrom(musicians, state.search);
+  return buildSongbookFrom(members, state.search);
 }
 
 function renderSongbook() {
@@ -254,7 +254,7 @@ function openInstantBandModal(title, roleMap) {
     const names = roleMap[role.id] || [];
     const badgesHtml = names.length > 0
       ? names.map(name => `
-          <span class="instant-band-badge clickable-musician" data-musician="${encodeDataValue(name)}"
+          <span class="instant-band-badge clickable-member" data-member="${encodeDataValue(name)}"
             style="color:${role.color};border-color:${role.color}55;background:${role.color}14;cursor:pointer;transition:transform 0.1s"
             onmouseover="this.style.transform='scale(1.05)'"
             onmouseout="this.style.transform='scale(1)'"
@@ -293,10 +293,10 @@ function openInstantBandModal(title, roleMap) {
   document.getElementById('modal-close-btn2').addEventListener('click', closeModal);
   
   // Route to the specific member's profile without changing the active view.
-  document.querySelectorAll('.clickable-musician').forEach(el => {
+  document.querySelectorAll('.clickable-member').forEach(el => {
     el.addEventListener('click', () => {
-      const mName = decodeDataValue(el.dataset.musician);
-      openMusicianProfileByName(mName);
+      const mName = decodeDataValue(el.dataset.member);
+      openMemberProfileByName(mName);
     });
   });
   
@@ -304,9 +304,9 @@ function openInstantBandModal(title, roleMap) {
 }
 
 // ── Bandbook ────────────────────────────────────────────────────────────────
-function buildBandbookFrom(sourceMusicians) {
+function buildBandbookFrom(sourceMembers) {
   const bands = {};
-  sourceMusicians.forEach(m => {
+  sourceMembers.forEach(m => {
     for (const [title, roles] of Object.entries(m.songs)) {
       let bandName = "Originals / Unknown";
       let songName = title;
@@ -331,7 +331,7 @@ function buildBandbookFrom(sourceMusicians) {
 }
 
 function buildBandbook() {
-  return buildBandbookFrom(musicians);
+  return buildBandbookFrom(members);
 }
 
 function renderBandbook() {
@@ -348,13 +348,13 @@ function renderBandbook() {
       const matchesSong = Object.keys(bandbook[b]).some(s => normaliseSearch(s).includes(q));
       
       // Check if any member in this band matches the search query
-      const matchesMusician = Object.values(bandbook[b]).some(songRoles => {
+      const matchesMember = Object.values(bandbook[b]).some(songRoles => {
         return Object.values(songRoles).some(players => {
           return players.some(p => normaliseSearch(p).includes(q));
         });
       });
       
-      return matchesBandName || matchesSong || matchesMusician;
+      return matchesBandName || matchesSong || matchesMember;
     });
   }
 
@@ -491,7 +491,7 @@ function renderCard(m) {
   const songCount = songKeys.length;
 
   return `
-    <div class="musician-card" data-id="${escapeAttr(m.id)}" data-name="${escapeAttr(m.name)}"
+    <div class="member-card" data-id="${escapeAttr(m.id)}" data-name="${escapeAttr(m.name)}"
          style="--accent-color:${accentColor}22">
       <div class="card-header">
         <div class="avatar" style="background:${accentColor}22;color:${accentColor}">
@@ -507,7 +507,7 @@ function renderCard(m) {
       <div class="card-footer">
         <button class="btn btn-secondary btn-view" style="flex:1;justify-content:center">👁 View All</button>
         <button class="btn btn-secondary btn-edit" style="flex:1;justify-content:center">✏️ Edit</button>
-        <button class="btn btn-danger btn-del" title="Remove member">🗑</button>
+        <button class="btn btn-danger btn-del" title="Remove from members">🗑</button>
       </div>
     </div>`;
 }
@@ -524,14 +524,14 @@ function renderFilterChips() {
     c.addEventListener('click', () => {
       state.filter = c.dataset.filter;
       renderFilterChips();
-      renderMusicians();
+      renderMembers();
     });
   });
 }
 
 // ===== VIEW MODAL =====
 function openViewModal(id) {
-  const m = musicians.find(x => x.id === id);
+  const m = members.find(x => x.id === id);
   if (!m) return;
   const accentColor = ROLE_MAP[m.roles[0]]?.color || '#5b8cff';
   const safeName = escapeHtml(m.name);
@@ -589,10 +589,10 @@ function openViewModal(id) {
   openModal();
 }
 
-function openMusicianProfileByName(name) {
-  const musician = musicians.find(m => normaliseSearch(m.name) === normaliseSearch(name));
-  if (!musician) return;
-  openViewModal(musician.id);
+function openMemberProfileByName(name) {
+  const member = members.find(m => normaliseSearch(m.name) === normaliseSearch(name));
+  if (!member) return;
+  openViewModal(member.id);
 }
 
 // ===== ADD / EDIT MODAL =====
@@ -600,11 +600,11 @@ function openAddModal() {
   state.editingId = null;
   state.editRoles = [];
   state.editSongs = {};
-  renderEditModal('Add Yourself 🎸');
+  renderEditModal('Add Members 🎼');
 }
 
 function openEditModal(id) {
-  const m = musicians.find(x => x.id === id);
+  const m = members.find(x => x.id === id);
   if (!m) return;
   state.editingId = id;
   state.editRoles = [...m.roles];
@@ -880,8 +880,8 @@ async function saveEdit() {
   saveBtn.disabled = true;
   saveBtn.textContent = 'Saving…';
 
-  const existing = musicians.find(m => m.id === state.editingId);
-  const colorIdx = existing ? existing.colorIdx : musicians.length % AVATAR_COLORS.length;
+  const existing = members.find(m => m.id === state.editingId);
+  const colorIdx = existing ? existing.colorIdx : members.length % AVATAR_COLORS.length;
 
   const finalSongs = {};
   const allSongRids = new Set();
@@ -920,22 +920,22 @@ async function saveEdit() {
         method: 'PUT',
         body:   JSON.stringify(payload),
       });
-      musicians = musicians.map(m => m.id === saved.id ? saved : m);
+      members = members.map(m => m.id === saved.id ? saved : m);
       toast('Profile updated!', 'success');
     } else {
       saved = await apiFetch(API, {
         method: 'POST',
         body:   JSON.stringify(payload),
       });
-      musicians.push(saved);
-      toast(`${saved.name} added to the session 🎸`, 'success');
+      members.push(saved);
+      toast(`${saved.name} added to members 🎼`, 'success');
     }
     closeModal();
-    renderMusicians();
+    renderMembers();
   } catch (err) {
     toast(err.message, 'error');
     saveBtn.disabled = false;
-    saveBtn.textContent = 'Save Member';
+    saveBtn.textContent = 'Save Profile';
   }
 }
 
@@ -986,7 +986,7 @@ async function init() {
 
   document.getElementById('search-input').addEventListener('input', e => {
     state.search = e.target.value;
-    renderMusicians();
+    renderMembers();
   });
 
   document.getElementById('add-member-btn').addEventListener('click', openAddModal);
@@ -1000,7 +1000,7 @@ async function init() {
   // ── View toggle ─────────────────────────────────────────────────────────────
   function switchView(view) {
     state.view = view;
-    const membersGrid  = document.getElementById('musicians-grid');
+    const membersGrid  = document.getElementById('members-grid');
     const songbookGrid = document.getElementById('songbook-grid');
     const bandbookGrid = document.getElementById('bandbook-grid');
     const filterBar    = document.getElementById('filter-bar');
@@ -1030,7 +1030,7 @@ async function init() {
       membersGrid.classList.remove('hidden');
       filterBar.classList.remove('hidden');
       btnMembers.classList.add('active');
-      searchInput.placeholder = 'Search member, band, or song…';
+      searchInput.placeholder = 'Search members, bands, or songs…';
     } else if (view === 'songbook') {
       songbookGrid.classList.remove('hidden');
       btnSongbook.classList.add('active');
@@ -1040,7 +1040,7 @@ async function init() {
       btnBandbook.classList.add('active');
       searchInput.placeholder = 'Search band…';
     }
-    renderMusicians();
+    renderMembers();
   }
 
   document.getElementById('toggle-members').addEventListener('click', () => switchView('members'));
@@ -1048,10 +1048,10 @@ async function init() {
   document.getElementById('toggle-bandbook').addEventListener('click', () => switchView('bandbook'));
 
   try {
-    await loadMusicians();
+    await loadMembers();
   } catch (err) {
     console.error(err);
-    document.getElementById('musicians-grid').innerHTML = `
+    document.getElementById('members-grid').innerHTML = `
       <div class="empty-state" style="grid-column:1/-1">
         <div class="empty-icon">⚠️</div>
         <div class="empty-title">Could not connect to server</div>

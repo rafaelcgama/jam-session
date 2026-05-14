@@ -11,7 +11,10 @@ jam.db
 jam.db-shm
 jam.db-wal
 jam.db.backup.*
+.db_backups/
 sqlite_mcp_server.db
+identifier.sqlite
+prod-jam.db
 
 # IDE
 .idea/

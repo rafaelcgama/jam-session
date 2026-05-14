@@ -23,8 +23,8 @@ test('encodes and decodes dataset values without losing special characters', () 
   assert.equal(app.decodeDataValue(app.encodeDataValue(raw)), raw);
 });
 
-test('builds songbook rows and filters by musician name', () => {
-  const musicians = [
+test('builds songbook rows and filters by member name', () => {
+  const members = [
     {
       name: 'Ana',
       songs: {
@@ -40,17 +40,17 @@ test('builds songbook rows and filters by musician name', () => {
     },
   ];
 
-  assert.deepEqual(app.buildSongbookFrom(musicians, 'ana'), {
+  assert.deepEqual(app.buildSongbookFrom(members, 'ana'), {
     'Radiohead - Creep': { singer: ['Ana'] },
     'Nirvana - Lithium': { guitarist: ['Ana'] },
   });
-  assert.deepEqual(app.buildSongbookFrom(musicians, 'creep'), {
+  assert.deepEqual(app.buildSongbookFrom(members, 'creep'), {
     'Radiohead - Creep': { singer: ['Ana'], guitarist: ['Ben'] },
   });
 });
 
 test('builds bandbook groups and keeps unknown originals together', () => {
-  const musicians = [
+  const members = [
     {
       name: 'Ana',
       songs: {
@@ -60,7 +60,7 @@ test('builds bandbook groups and keeps unknown originals together', () => {
     },
   ];
 
-  assert.deepEqual(app.buildBandbookFrom(musicians), {
+  assert.deepEqual(app.buildBandbookFrom(members), {
     Radiohead: {
       Creep: {
         singer: ['Ana'],

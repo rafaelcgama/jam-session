@@ -262,15 +262,15 @@ main {
 }
 .chip-icon { font-size: 0.9rem; }
 
-/* ===== MUSICIANS GRID ===== */
-.musicians-grid {
+/* ===== MEMBERS GRID ===== */
+.members-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1.25rem;
 }
 
-/* ===== MUSICIAN CARD ===== */
-.musician-card {
+/* ===== MEMBER CARD ===== */
+.member-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -283,7 +283,7 @@ main {
   position: relative;
   overflow: hidden;
 }
-.musician-card::before {
+.member-card::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -292,12 +292,12 @@ main {
   transition: var(--transition);
   pointer-events: none;
 }
-.musician-card:hover {
+.member-card:hover {
   border-color: var(--border-strong);
   transform: translateY(-2px);
   box-shadow: var(--shadow-card);
 }
-.musician-card:hover::before { opacity: 1; }
+.member-card:hover::before { opacity: 1; }
 
 .card-header {
   display: flex;
@@ -739,7 +739,7 @@ main {
   .logo-subtitle { font-size: 0.6rem; }
   .search-wrapper { max-width: 160px; }
   main { padding: 1.5rem 1rem 3rem; }
-  .musicians-grid { grid-template-columns: 1fr; }
+  .members-grid { grid-template-columns: 1fr; }
   .modal { padding: 1.25rem; }
   .roles-grid { grid-template-columns: repeat(2, 1fr); }
   .section-title { font-size: 1.25rem; }

@@ -5,13 +5,12 @@ Run with:
     pytest tests/ -v
 """
 import json
+import sqlite3
 import pytest
 from fastapi.testclient import TestClient
 
 # ── Override DB path to use an in-memory / temp DB during tests ──────────────
 import database
-import tempfile
-from pathlib import Path
 
 @pytest.fixture(autouse=True)
 def isolated_db(tmp_path, monkeypatch):
@@ -32,39 +31,39 @@ def client():
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────
-def create_musician(client, name="Carlos", roles=None, songs=None):
+def create_member(client, name="Carlos", roles=None, songs=None):
     payload = {
         "name": name,
         "colorIdx": 0,
         "roles": roles or ["guitarist"],
         "songs": songs or {"Wonderwall": ["guitarist"]},
     }
-    return client.post("/api/musicians", json=payload)
+    return client.post("/api/members", json=payload)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GET /api/musicians
+# GET /api/members
 # ─────────────────────────────────────────────────────────────────────────────
-class TestListMusicians:
+class TestListMembers:
     def test_returns_empty_list_initially(self, client):
-        res = client.get("/api/musicians")
+        res = client.get("/api/members")
         assert res.status_code == 200
         assert res.json() == []
 
-    def test_returns_all_musicians(self, client):
-        create_musician(client, name="Carlos")
-        create_musician(client, name="Sofia")
-        res = client.get("/api/musicians")
+    def test_returns_all_members(self, client):
+        create_member(client, name="Carlos")
+        create_member(client, name="Sofia")
+        res = client.get("/api/members")
         assert res.status_code == 200
         assert len(res.json()) == 2
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# POST /api/musicians
+# POST /api/members
 # ─────────────────────────────────────────────────────────────────────────────
-class TestCreateMusician:
-    def test_creates_musician_with_valid_data(self, client):
-        res = create_musician(client, name="Carlos", roles=["guitarist", "singer"])
+class TestCreateMember:
+    def test_creates_member_with_valid_data(self, client):
+        res = create_member(client, name="Carlos", roles=["guitarist", "singer"])
         assert res.status_code == 201
         body = res.json()
         assert body["name"] == "Carlos"
@@ -73,45 +72,50 @@ class TestCreateMusician:
         assert "id" in body
         assert "joinedAt" in body
 
-    def test_creates_musician_with_songs(self, client):
+    def test_creates_member_with_songs(self, client):
         songs = {"Wonderwall": ["guitarist"], "Sweet Child": ["guitarist", "singer"]}
-        res = create_musician(client, name="Carlos", songs=songs)
+        res = create_member(client, name="Carlos", songs=songs)
         assert res.status_code == 201
         assert res.json()["songs"] == songs
 
     def test_rejects_empty_name(self, client):
-        res = client.post("/api/musicians", json={"name": "  ", "roles": ["guitarist"], "songs": {}})
+        res = client.post("/api/members", json={"name": "  ", "roles": ["guitarist"], "songs": {}})
         assert res.status_code == 400
         assert "Name is required" in res.json()["detail"]
 
     def test_rejects_empty_roles(self, client):
-        res = client.post("/api/musicians", json={"name": "Carlos", "roles": [], "songs": {}})
+        res = client.post("/api/members", json={"name": "Carlos", "roles": [], "songs": {}})
         assert res.status_code == 400
         assert "role" in res.json()["detail"].lower()
 
     def test_rejects_duplicate_name(self, client):
-        create_musician(client, name="Carlos")
-        res = create_musician(client, name="Carlos")
+        create_member(client, name="Carlos")
+        res = create_member(client, name="Carlos")
         assert res.status_code == 409
         assert "already in the session" in res.json()["detail"]
 
     def test_duplicate_check_is_case_insensitive(self, client):
-        create_musician(client, name="Carlos")
-        res = create_musician(client, name="carlos")
+        create_member(client, name="Carlos")
+        res = create_member(client, name="carlos")
         assert res.status_code == 409
 
     def test_strips_whitespace_from_name(self, client):
-        res = client.post("/api/musicians", json={"name": "  Carlos  ", "roles": ["guitarist"], "songs": {}})
+        res = client.post("/api/members", json={"name": "  Carlos  ", "roles": ["guitarist"], "songs": {}})
         assert res.status_code == 201
         assert res.json()["name"] == "Carlos"
 
+    def test_normalizes_member_name_to_title_case(self, client):
+        res = client.post("/api/members", json={"name": "  paula   santos  ", "roles": ["singer"], "songs": {}})
+        assert res.status_code == 201
+        assert res.json()["name"] == "Paula Santos"
+
     def test_rejects_unknown_profile_role(self, client):
-        res = client.post("/api/musicians", json={"name": "Carlos", "roles": ["triangle"], "songs": {}})
+        res = client.post("/api/members", json={"name": "Carlos", "roles": ["triangle"], "songs": {}})
         assert res.status_code == 400
         assert "Unknown role" in res.json()["detail"]
 
     def test_rejects_unknown_song_role(self, client):
-        res = client.post("/api/musicians", json={
+        res = client.post("/api/members", json={
             "name": "Carlos",
             "roles": ["guitarist"],
             "songs": {"Wonderwall": ["guitarist", "triangle"]},
@@ -120,7 +124,7 @@ class TestCreateMusician:
         assert "Unknown role" in res.json()["detail"]
 
     def test_rejects_blank_song_title(self, client):
-        res = client.post("/api/musicians", json={
+        res = client.post("/api/members", json={
             "name": "Carlos",
             "roles": ["guitarist"],
             "songs": {" - ": ["guitarist"]},
@@ -129,7 +133,7 @@ class TestCreateMusician:
         assert "Song title is required" in res.json()["detail"]
 
     def test_deduplicates_roles_and_sanitised_song_keys(self, client):
-        res = client.post("/api/musicians", json={
+        res = client.post("/api/members", json={
             "name": "Carlos",
             "roles": ["guitarist", "guitarist"],
             "songs": {
@@ -142,7 +146,7 @@ class TestCreateMusician:
         assert res.json()["songs"] == {"Radiohead - Creep": ["guitarist", "singer"]}
 
     def test_adds_song_roles_to_profile_roles(self, client):
-        res = client.post("/api/musicians", json={
+        res = client.post("/api/members", json={
             "name": "Carlos",
             "roles": ["singer"],
             "songs": {"Wonderwall": ["guitarist"]},
@@ -152,21 +156,21 @@ class TestCreateMusician:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PUT /api/musicians/{id}
+# PUT /api/members/{id}
 # ─────────────────────────────────────────────────────────────────────────────
-class TestUpdateMusician:
-    def test_updates_musician_name(self, client):
-        musician_id = create_musician(client, name="Carlos").json()["id"]
-        res = client.put(f"/api/musicians/{musician_id}", json={
-            "name": "Karl", "colorIdx": 0, "roles": ["guitarist"], "songs": {}
+class TestUpdateMember:
+    def test_updates_member_name(self, client):
+        member_id = create_member(client, name="Carlos").json()["id"]
+        res = client.put(f"/api/members/{member_id}", json={
+            "name": "karl lager", "colorIdx": 0, "roles": ["guitarist"], "songs": {}
         })
         assert res.status_code == 200
-        assert res.json()["name"] == "Karl"
+        assert res.json()["name"] == "Karl Lager"
 
     def test_updates_roles_and_songs(self, client):
-        musician_id = create_musician(client).json()["id"]
+        member_id = create_member(client).json()["id"]
         updated_songs = {"Bohemian Rhapsody": ["guitarist", "singer"]}
-        res = client.put(f"/api/musicians/{musician_id}", json={
+        res = client.put(f"/api/members/{member_id}", json={
             "name": "Carlos", "colorIdx": 0,
             "roles": ["guitarist", "singer"],
             "songs": updated_songs,
@@ -177,30 +181,30 @@ class TestUpdateMusician:
         assert body["songs"] == updated_songs
 
     def test_returns_404_for_unknown_id(self, client):
-        res = client.put("/api/musicians/nonexistent-id", json={
+        res = client.put("/api/members/nonexistent-id", json={
             "name": "Carlos", "colorIdx": 0, "roles": ["guitarist"], "songs": {}
         })
         assert res.status_code == 404
 
     def test_rejects_empty_name_on_update(self, client):
-        musician_id = create_musician(client).json()["id"]
-        res = client.put(f"/api/musicians/{musician_id}", json={
+        member_id = create_member(client).json()["id"]
+        res = client.put(f"/api/members/{member_id}", json={
             "name": "", "colorIdx": 0, "roles": ["guitarist"], "songs": {}
         })
         assert res.status_code == 400
 
     def test_rejects_empty_roles_on_update(self, client):
-        musician_id = create_musician(client).json()["id"]
-        res = client.put(f"/api/musicians/{musician_id}", json={
+        member_id = create_member(client).json()["id"]
+        res = client.put(f"/api/members/{member_id}", json={
             "name": "Carlos", "colorIdx": 0, "roles": [], "songs": {}
         })
         assert res.status_code == 400
 
     def test_rejects_duplicate_name_on_update(self, client):
-        create_musician(client, name="Carlos")
-        sofia_id = create_musician(client, name="Sofia").json()["id"]
+        create_member(client, name="Carlos")
+        sofia_id = create_member(client, name="Sofia").json()["id"]
 
-        res = client.put(f"/api/musicians/{sofia_id}", json={
+        res = client.put(f"/api/members/{sofia_id}", json={
             "name": "carlos", "colorIdx": 0, "roles": ["singer"], "songs": {}
         })
 
@@ -209,20 +213,20 @@ class TestUpdateMusician:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# DELETE /api/musicians/{id}
+# DELETE /api/members/{id}
 # ─────────────────────────────────────────────────────────────────────────────
-class TestDeleteMusician:
-    def test_deletes_existing_musician(self, client):
-        musician_id = create_musician(client).json()["id"]
-        res = client.delete(f"/api/musicians/{musician_id}")
+class TestDeleteMember:
+    def test_deletes_existing_member(self, client):
+        member_id = create_member(client).json()["id"]
+        res = client.delete(f"/api/members/{member_id}")
         assert res.status_code == 200
         assert res.json()["success"] is True
         # Verify it's gone
-        musicians = client.get("/api/musicians").json()
-        assert all(m["id"] != musician_id for m in musicians)
+        members = client.get("/api/members").json()
+        assert all(m["id"] != member_id for m in members)
 
     def test_returns_404_for_unknown_id(self, client):
-        res = client.delete("/api/musicians/nonexistent-id")
+        res = client.delete("/api/members/nonexistent-id")
         assert res.status_code == 404
 
 
@@ -236,7 +240,7 @@ class TestDatabase:
     def test_name_exists_returns_true_after_insert(self):
         from datetime import date
         import uuid
-        musician = {
+        member = {
             "id": str(uuid.uuid4()),
             "name": "Carlos",
             "colorIdx": 0,
@@ -244,14 +248,14 @@ class TestDatabase:
             "songs": {},
             "joinedAt": str(date.today()),
         }
-        database.create(musician)
+        database.create(member)
         assert database.name_exists("Carlos") is True
 
     def test_name_exists_exclude_id_allows_same_name(self):
         from datetime import date
         import uuid
         mid = str(uuid.uuid4())
-        musician = {
+        member = {
             "id": mid,
             "name": "Carlos",
             "colorIdx": 0,
@@ -259,18 +263,18 @@ class TestDatabase:
             "songs": {},
             "joinedAt": str(date.today()),
         }
-        database.create(musician)
+        database.create(member)
         # Should NOT count itself as a duplicate when updating
         assert database.name_exists("Carlos", exclude_id=mid) is False
 
     def test_get_by_id_returns_none_for_unknown(self):
         assert database.get_by_id("does-not-exist") is None
 
-    def test_parse_musician_deserialises_json_fields(self):
+    def test_parse_member_deserialises_json_fields(self):
         from datetime import date
         import uuid
         mid = str(uuid.uuid4())
-        musician = {
+        member = {
             "id": mid,
             "name": "Ana",
             "colorIdx": 2,
@@ -278,9 +282,39 @@ class TestDatabase:
             "songs": {"Hey Jude": ["singer"]},
             "joinedAt": str(date.today()),
         }
-        database.create(musician)
+        database.create(member)
         result = database.get_by_id(mid)
         assert isinstance(result["roles"], list)
         assert isinstance(result["songs"], dict)
         assert result["roles"] == ["singer", "guitarist"]
         assert result["songs"] == {"Hey Jude": ["singer"]}
+
+    def test_init_db_migrates_legacy_musicians_table(self, tmp_path, monkeypatch):
+        legacy_db = tmp_path / "legacy_jam.db"
+        with sqlite3.connect(legacy_db) as conn:
+            conn.execute("""
+                CREATE TABLE musicians (
+                    id        TEXT PRIMARY KEY,
+                    name      TEXT NOT NULL,
+                    colorIdx  INTEGER DEFAULT 0,
+                    roles     TEXT NOT NULL DEFAULT '[]',
+                    songs     TEXT NOT NULL DEFAULT '{}',
+                    joinedAt  TEXT NOT NULL
+                )
+            """)
+            conn.execute(
+                "INSERT INTO musicians (id, name, colorIdx, roles, songs, joinedAt) VALUES (?, ?, ?, ?, ?, ?)",
+                ("member-1", "Ana", 0, "[]", "{}", "2026-05-13"),
+            )
+
+        monkeypatch.setattr(database, "DB_PATH", legacy_db)
+        database.init_db()
+
+        with sqlite3.connect(legacy_db) as conn:
+            tables = {
+                row[0]
+                for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            }
+            assert "members" in tables
+            assert "musicians" not in tables
+            assert conn.execute("SELECT COUNT(*) FROM members").fetchone()[0] == 1
